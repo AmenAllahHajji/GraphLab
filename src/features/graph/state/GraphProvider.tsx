@@ -4,13 +4,17 @@ import {
 } from 'react'
 import { initialDocument } from '../model/defaults'
 import { GraphDispatchContext, GraphStateContext } from './GraphContext'
-import { graphReducer } from './graphReducer'
+import { historyReducer } from './historyReducer'
 
 export function GraphProvider({ children }: PropsWithChildren) {
-  const [state, dispatch] = useReducer(graphReducer, initialDocument)
+  const [state, dispatch] = useReducer(historyReducer, {
+    past: [],
+    present: initialDocument,
+    future: [],
+  })
 
   return (
-    <GraphStateContext.Provider value={state}>
+    <GraphStateContext.Provider value={state.present}>
       <GraphDispatchContext.Provider value={dispatch}>
         {children}
       </GraphDispatchContext.Provider>

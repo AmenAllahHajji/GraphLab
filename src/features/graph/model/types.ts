@@ -44,6 +44,7 @@ export interface GraphState {
 
 export interface GraphDocument {
   mode: EditorMode
+  isDevMode: boolean
   graph: GraphState
   interaction: GraphInteractionState
 }

@@ -1,0 +1,20 @@
+@keyframes pulse-travel {
+  0% {
+    stroke-dasharray: 0 1000;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  50% {
+    stroke-dasharray: 100 1000;
+    stroke-dashoffset: -50;
+  }
+  100% {
+    stroke-dasharray: 0 1000;
+    stroke-dashoffset: -300;
+    opacity: 0;
+  }
+}
+
+.edge-pulse-animation {
+  animation: pulse-travel 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}

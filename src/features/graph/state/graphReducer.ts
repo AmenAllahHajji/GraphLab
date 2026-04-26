@@ -23,6 +23,9 @@ export type GraphAction =
   | { type: 'RESIZE_NODE_COUNT'; payload: { count: number } }
   | { type: 'APPLY_ADJACENCY_MATRIX'; payload: { matrix: number[][] } }
   | { type: 'RESET' }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'SET_DEV_MODE'; payload: { isDevMode: boolean } }
 
 function edgeExists(
   edges: GraphEdge[],
@@ -180,7 +183,16 @@ export function graphReducer(
     }
 
     case 'ADD_NODE': {
-      const nextId = state.graph.nextNodeId
+      // Find the lowest available positive integer to fill gaps
+      let nextId = 1
+      const sortedIds = [...state.graph.nodes].sort((a, b) => a - b)
+      for (const id of sortedIds) {
+        if (id === nextId) {
+          nextId += 1
+        } else if (id > nextId) {
+          break // Found a gap!
+        }
+      }
 
       return {
         ...state,
@@ -191,7 +203,7 @@ export function graphReducer(
             ...state.graph.positions,
             [nextId]: action.payload.position,
           },
-          nextNodeId: nextId + 1,
+          nextNodeId: Math.max(state.graph.nextNodeId, nextId + 1),
         },
       }
     }
@@ -462,6 +474,13 @@ export function graphReducer(
 
     case 'RESET': {
       return initialDocument
+    }
+
+    case 'SET_DEV_MODE': {
+      return {
+        ...state,
+        isDevMode: action.payload.isDevMode,
+      }
     }
 
     default: {
