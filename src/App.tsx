@@ -1,11 +1,14 @@
 import { GraphProvider } from './features/graph/state/GraphProvider'
 import { GraphWorkspace } from './features/workspace/components/GraphWorkspace'
+import { ShortcutProvider } from './shared/context/ShortcutContext'
 
 function App() {
   return (
-    <GraphProvider>
-      <GraphWorkspace />
-    </GraphProvider>
+    <ShortcutProvider>
+      <GraphProvider>
+        <GraphWorkspace />
+      </GraphProvider>
+    </ShortcutProvider>
   )
 }
 

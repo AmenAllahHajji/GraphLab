@@ -7,6 +7,7 @@ const defaultPositions: Record<number, Position> = {
 
 export const initialDocument: GraphDocument = {
   mode: 'visual',
+  isDevMode: false,
   graph: {
 	nodes: [1, 2],
 	edges: [{ id: 'e1', from: 1, to: 2, weight: 1 }],

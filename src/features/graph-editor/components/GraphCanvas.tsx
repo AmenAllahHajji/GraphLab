@@ -1,4 +1,5 @@
 import { drag, type D3DragEvent } from 'd3-drag'
+import { zoom, type D3ZoomEvent } from 'd3-zoom'
 import { pointer, select } from 'd3-selection'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -7,6 +8,14 @@ import {
   weightPolicyHint,
 } from '../../graph/model/weightPolicy'
 import { useGraphDispatch, useGraphState } from '../../graph/state/useGraphStore'
+import { EdgeFlowParticles } from './EdgeFlowParticles'
+import { ParticleBurst } from './ParticleBurst'
+import { EdgePulse } from './EdgePulse'
+import { GraphMetrics } from './GraphMetrics'
+import { SnapGuides } from './SnapGuides'
+import { calculateSnap } from '../hooks/useMagneticSnap'
+import { useShortcut } from '../../../shared/hooks/useShortcut'
+import './GraphCanvas.css'
 
 const CANVAS_WIDTH = 900
 const CANVAS_HEIGHT = 520
@@ -18,9 +27,45 @@ interface EdgeGeometry {
   labelY: number
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
+
+
+function applyCollisions(
+  targetX: number,
+  targetY: number,
+  ignoreId: number | null,
+  nodes: number[],
+  positions: Record<number, { x: number; y: number }>,
+  minDist = 55
+): { x: number; y: number } {
+  let cx = targetX
+  let cy = targetY
+
+  for (let step = 0; step < 3; step++) {
+    for (const id of nodes) {
+      if (id === ignoreId) continue
+      const pos = positions[id]
+      if (!pos) continue
+
+      const dx = cx - pos.x
+      const dy = cy - pos.y
+      const dist = Math.hypot(dx, dy)
+
+      if (dist < minDist && dist > 0.001) {
+        const pushDist = minDist - dist
+        const ux = dx / dist
+        const uy = dy / dist
+        cx += ux * pushDist
+        cy += uy * pushDist
+      } else if (dist <= 0.001) {
+        cx += minDist
+      }
+    }
+  }
+
+  return { x: cx, y: cy }
 }
+
+
 
 function buildEdgeGeometry(
   from: { x: number; y: number },
@@ -68,6 +113,117 @@ function buildEdgeGeometry(
   }
 }
 
+function EdgeItem({
+  edge,
+  from,
+  to,
+  isSelected,
+  hasReverse,
+  directed,
+  weighted,
+  editingEdgeId,
+  weightDraft,
+  startWeightEdit,
+  setWeightDraft,
+  setWeightError,
+  commitWeight,
+  setEditingEdgeId,
+  dispatch
+}: any) {
+  const pathRef = useRef<SVGPathElement>(null)
+  const signedOffset =
+    hasReverse && edge.from !== edge.to ? (edge.from < edge.to ? 16 : -16) : 0
+  const geometry = buildEdgeGeometry(from, to, signedOffset, directed)
+
+  return (
+    <g className="transition-opacity hover:opacity-80">
+      <path
+        d={geometry.path}
+        stroke="transparent"
+        strokeWidth={15}
+        fill="none"
+        className="cursor-pointer"
+        onClick={(event) => {
+          event.stopPropagation()
+          dispatch({ type: 'SET_SELECTED_EDGE', payload: { edgeId: edge.id } })
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation()
+          dispatch({ type: 'DELETE_EDGE', payload: { edgeId: edge.id } })
+        }}
+      />
+      <path
+        ref={pathRef}
+        d={geometry.path}
+        className={`pointer-events-none transition-all duration-300 ${isSelected ? 'stroke-purple-400' : 'stroke-indigo-400/70'}`}
+        strokeWidth={isSelected ? 3 : 2}
+        fill="none"
+        strokeLinecap="round"
+        filter={isSelected ? "url(#glow-selected)" : ""}
+        markerEnd={directed ? (isSelected ? 'url(#arrow-selected)' : 'url(#arrow)') : undefined}
+      />
+      
+      <EdgeFlowParticles pathRef={pathRef} speed={directed ? 1 : 0.8} isActive={true} />
+      <EdgePulse d={geometry.path} color={isSelected ? "#c084fc" : "#00ffcc"} />
+      
+      {weighted && (
+        <g className="cursor-pointer" onClick={(event) => {
+          event.stopPropagation()
+          startWeightEdit(edge.id, edge.weight)
+        }}>
+          <circle
+            cx={geometry.labelX}
+            cy={geometry.labelY}
+            r={14}
+            fill="#1e1b4b"
+            stroke={isSelected ? "#c084fc" : "#6366f1"}
+            strokeWidth={1.5}
+            className="transition-colors duration-300"
+          />
+          {editingEdgeId === edge.id ? (
+            <foreignObject
+              x={geometry.labelX - 28}
+              y={geometry.labelY - 14}
+              width={56}
+              height={28}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <input
+                autoFocus
+                value={weightDraft}
+                className="h-7 w-14 rounded bg-slate-900 border border-purple-500 px-1 text-center text-xs font-semibold text-white outline-none focus:ring-1 focus:ring-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+                onChange={(event) => {
+                  setWeightDraft(event.currentTarget.value)
+                  setWeightError(null)
+                }}
+                onBlur={() => commitWeight(edge.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitWeight(edge.id)
+                  }
+                  if (event.key === 'Escape') {
+                    setEditingEdgeId(null)
+                    setWeightError(null)
+                  }
+                }}
+              />
+            </foreignObject>
+          ) : (
+            <text
+              x={geometry.labelX}
+              y={geometry.labelY + 4}
+              textAnchor="middle"
+              className="pointer-events-none fill-white text-[12px] font-bold"
+            >
+              {edge.weight}
+            </text>
+          )}
+        </g>
+      )}
+    </g>
+  )
+}
+
 export function GraphCanvas() {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dispatch = useGraphDispatch()
@@ -78,6 +234,63 @@ export function GraphCanvas() {
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
   const [weightDraft, setWeightDraft] = useState('')
   const [weightError, setWeightError] = useState<string | null>(null)
+  const [bursts, setBursts] = useState<{ id: number; x: number; y: number }[]>([])
+  const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null })
+  const [transform, setTransform] = useState({ k: 1, x: 0, y: 0 })
+  
+  const positionsRef = useRef(graph.positions)
+  useEffect(() => {
+    positionsRef.current = graph.positions
+  }, [graph.positions])
+
+  useShortcut('Escape', () => {
+    if (interaction.edgeDraftFrom !== null) {
+      dispatch({ type: 'CLEAR_EDGE_DRAFT' })
+    }
+    if (editingEdgeId !== null) {
+      setEditingEdgeId(null)
+      setWeightError(null)
+    }
+  })
+
+  const handleDeleteShortcut = () => {
+    if (interaction.selectedNodeId !== null) {
+      dispatch({ type: 'DELETE_NODE', payload: { nodeId: interaction.selectedNodeId } })
+    } else if (interaction.selectedEdgeId !== null) {
+      dispatch({ type: 'DELETE_EDGE', payload: { edgeId: interaction.selectedEdgeId } })
+    }
+  }
+
+  useShortcut('Delete', handleDeleteShortcut)
+  useShortcut('Backspace', handleDeleteShortcut)
+
+  useShortcut('N', () => {
+    const viewportX = CANVAS_WIDTH / 2
+    const viewportY = CANVAS_HEIGHT / 2
+    let worldX = (viewportX - transform.x) / transform.k
+    let worldY = (viewportY - transform.y) / transform.k
+
+    // Apply collisions so N doesn't stack nodes
+    const collided = applyCollisions(worldX, worldY, null, graph.nodes, positionsRef.current, 55)
+    
+    dispatch({ type: 'ADD_NODE', payload: { position: { x: collided.x, y: collided.y } } })
+  })
+
+  useShortcut('D', () => {
+    dispatch({ type: 'SET_DIRECTED', payload: { directed: !graph.directed } })
+  })
+
+  useShortcut('W', () => {
+    dispatch({ type: 'SET_WEIGHTED', payload: { weighted: !graph.weighted } })
+  })
+
+  useShortcut('Ctrl+Z', () => {
+    dispatch({ type: 'UNDO' })
+  })
+
+  useShortcut('Ctrl+Y', () => {
+    dispatch({ type: 'REDO' })
+  })
 
   function startWeightEdit(edgeId: string, currentWeight: number) {
     setEditingEdgeId(edgeId)
@@ -110,9 +323,9 @@ export function GraphCanvas() {
     }
 
     const selection = select(svgRef.current)
-    const behavior = drag<SVGGElement, unknown>().on(
-      'drag',
-      function onDrag(
+    const behavior = drag<SVGGElement, unknown>()
+      .filter((event) => event.button === 0)
+      .on('drag', function onDrag(
         this: SVGGElement,
         event: D3DragEvent<SVGGElement, unknown, unknown>,
       ) {
@@ -122,23 +335,53 @@ export function GraphCanvas() {
           return
         }
 
+        const rawX = event.x
+        const rawY = event.y
+
+        // Apply collisions during drag
+        const collided = applyCollisions(rawX, rawY, id, graph.nodes, positionsRef.current, 50)
+
+        const { snapX, snapY, guideX, guideY } = calculateSnap(
+          id,
+          collided.x,
+          collided.y,
+          graph.nodes,
+          positionsRef.current,
+          12 // snap threshold
+        )
+
+        // Ensure snap didn't drag it back into a collision
+        let finalX = snapX
+        let finalY = snapY
+        
+        setGuides({ x: guideX, y: guideY })
+
         dispatch({
           type: 'MOVE_NODE',
           payload: {
             nodeId: id,
-            position: {
-              x: clamp(event.x, 20, CANVAS_WIDTH - 20),
-              y: clamp(event.y, 20, CANVAS_HEIGHT - 20),
-            },
+            position: { x: finalX, y: finalY },
           },
         })
-      },
-    )
+      })
+      .on('end', () => {
+        setGuides({ x: null, y: null })
+      })
 
     selection.selectAll<SVGGElement, unknown>('g.node-wrapper').call(behavior)
 
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 5])
+      .filter((event) => event.button === 0 || event.type === 'wheel')
+      .on('zoom', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
+        setTransform(e.transform)
+      })
+
+    selection.call(zoomBehavior).on("dblclick.zoom", null) // disable dblclick to zoom
+
     return () => {
       selection.selectAll<SVGGElement, unknown>('g.node-wrapper').on('.drag', null)
+      selection.on('.zoom', null)
     }
   }, [dispatch, graph.nodes])
 
@@ -188,13 +431,14 @@ export function GraphCanvas() {
                 className="rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition-colors shadow-[0_0_10px_rgba(245,158,11,0.2)]"
                 onClick={() => dispatch({ type: 'CLEAR_EDGE_DRAFT' })}
               >
-                Cancel Draft
+                Cancel Draft (Esc)
               </button>
             )}
           </div>
           <div className="flex flex-col gap-1 text-xs text-slate-400">
-            <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Left click empty canvas to add node. Click A then B for edge.</p>
-            <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Right click node or double click edge to remove.</p>
+            <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> Left click (or 'N') to add node. Pan/Zoom with mouse.</p>
+            <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Right click (node) or Double click (edge) to remove. (Or Delete/Backspace)</p>
+            <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 'D' toggle Directed. 'W' toggle Weighted. Ctrl+Z/Y for Undo/Redo.</p>
             {graph.weighted && (
               <p className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Click edge weight to edit. {weightPolicyHint(graph.weightPolicy)}</p>
             )}
@@ -223,7 +467,10 @@ export function GraphCanvas() {
             }
 
             const [x, y] = pointer(event, svgRef.current)
-            setCursorPosition({ x, y })
+            // Transform viewport pointer to world coordinates
+            const worldX = (x - transform.x) / transform.k
+            const worldY = (y - transform.y) / transform.k
+            setCursorPosition({ x: worldX, y: worldY })
           }}
         >
           <defs>
@@ -251,6 +498,17 @@ export function GraphCanvas() {
               <path d="M0,2 L10,6 L0,10 L3,6 z" fill="#c084fc" />
             </marker>
             
+            <radialGradient id="node-gradient" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#a5b4fc" />
+              <stop offset="50%" stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#1e1b4b" />
+            </radialGradient>
+            <radialGradient id="node-gradient-selected" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#e879f9" />
+              <stop offset="50%" stopColor="#c084fc" />
+              <stop offset="100%" stopColor="#311060" />
+            </radialGradient>
+            
             <filter id="glow">
               <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
               <feMerge>
@@ -268,36 +526,44 @@ export function GraphCanvas() {
             </filter>
           </defs>
 
-          <rect
-            x={0}
-            y={0}
-            width="100%"
-            height="100%"
-            fill="url(#grid)"
-            onClick={(event) => {
-              if (event.button !== 0 || svgRef.current === null) {
-                return
-              }
+          <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
+            <rect
+              x={-50000}
+              y={-50000}
+              width={100000}
+              height={100000}
+              fill="url(#grid)"
+              className="animate-grid-pan"
+              onClick={(event) => {
+                if (event.button !== 0 || svgRef.current === null) {
+                  return
+                }
 
-              // Need to get coordinates mapping to the viewBox
-              const pt = svgRef.current.createSVGPoint()
-              pt.x = event.clientX
-              pt.y = event.clientY
-              const svgP = pt.matrixTransform(svgRef.current.getScreenCTM()?.inverse())
+                const pt = svgRef.current.createSVGPoint()
+                pt.x = event.clientX
+                pt.y = event.clientY
+                const svgP = pt.matrixTransform(svgRef.current.getScreenCTM()?.inverse())
 
-              dispatch({
-                type: 'ADD_NODE',
-                payload: {
-                  position: {
-                    x: clamp(svgP.x, 20, CANVAS_WIDTH - 20),
-                    y: clamp(svgP.y, 20, CANVAS_HEIGHT - 20),
-                  },
-                },
-              })
-              setEditingEdgeId(null)
-              setWeightError(null)
-            }}
-          />
+                // Manually apply the d3-zoom transform to get world coordinates
+                let rawX = (svgP.x - transform.x) / transform.k
+                let rawY = (svgP.y - transform.y) / transform.k
+                
+                // Prevent overlapping on click
+                const collided = applyCollisions(rawX, rawY, null, graph.nodes, graph.positions, 55)
+
+                const newBurstId = Date.now()
+                setBursts((prev) => [...prev, { id: newBurstId, x: collided.x, y: collided.y }])
+
+                dispatch({
+                  type: 'ADD_NODE',
+                  payload: { position: { x: collided.x, y: collided.y } },
+                })
+                setEditingEdgeId(null)
+                setWeightError(null)
+              }}
+            />
+            
+            <SnapGuides x={guides.x} y={guides.y} bounds={{ w: 10000, h: 10000 }} />
 
           {graph.edges.map((edge) => {
             const from = graph.positions[edge.from]
@@ -311,93 +577,26 @@ export function GraphCanvas() {
             const pairKey =
               edge.from < edge.to ? `${edge.from}-${edge.to}` : `${edge.to}-${edge.from}`
             const hasReverse = graph.directed && reverseEdgePairs.has(pairKey)
-            const signedOffset =
-              hasReverse && edge.from !== edge.to ? (edge.from < edge.to ? 16 : -16) : 0
-            const geometry = buildEdgeGeometry(from, to, signedOffset, graph.directed)
 
             return (
-              <g key={edge.id} className="transition-opacity hover:opacity-80">
-                {/* Hit area for easier clicking */}
-                <path
-                  d={geometry.path}
-                  stroke="transparent"
-                  strokeWidth={15}
-                  fill="none"
-                  className="cursor-pointer"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    dispatch({ type: 'SET_SELECTED_EDGE', payload: { edgeId: edge.id } })
-                  }}
-                  onDoubleClick={(event) => {
-                    event.stopPropagation()
-                    dispatch({ type: 'DELETE_EDGE', payload: { edgeId: edge.id } })
-                  }}
-                />
-                <path
-                  d={geometry.path}
-                  className={`pointer-events-none transition-all duration-300 ${isSelected ? 'stroke-purple-400' : 'stroke-indigo-400/70'}`}
-                  strokeWidth={isSelected ? 3 : 2}
-                  fill="none"
-                  strokeLinecap="round"
-                  filter={isSelected ? "url(#glow-selected)" : ""}
-                  markerEnd={graph.directed ? (isSelected ? 'url(#arrow-selected)' : 'url(#arrow)') : undefined}
-                />
-                
-                {graph.weighted && (
-                  <g className="cursor-pointer" onClick={(event) => {
-                    event.stopPropagation()
-                    startWeightEdit(edge.id, edge.weight)
-                  }}>
-                    <circle
-                      cx={geometry.labelX}
-                      cy={geometry.labelY}
-                      r={14}
-                      fill="#1e1b4b"
-                      stroke={isSelected ? "#c084fc" : "#6366f1"}
-                      strokeWidth={1.5}
-                      className="transition-colors duration-300"
-                    />
-                    {editingEdgeId === edge.id ? (
-                      <foreignObject
-                        x={geometry.labelX - 28}
-                        y={geometry.labelY - 14}
-                        width={56}
-                        height={28}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <input
-                          autoFocus
-                          value={weightDraft}
-                          className="h-7 w-14 rounded bg-slate-900 border border-purple-500 px-1 text-center text-xs font-semibold text-white outline-none focus:ring-1 focus:ring-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
-                          onChange={(event) => {
-                            setWeightDraft(event.currentTarget.value)
-                            setWeightError(null)
-                          }}
-                          onBlur={() => commitWeight(edge.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              commitWeight(edge.id)
-                            }
-                            if (event.key === 'Escape') {
-                              setEditingEdgeId(null)
-                              setWeightError(null)
-                            }
-                          }}
-                        />
-                      </foreignObject>
-                    ) : (
-                      <text
-                        x={geometry.labelX}
-                        y={geometry.labelY + 4}
-                        textAnchor="middle"
-                        className="pointer-events-none fill-white text-[12px] font-bold"
-                      >
-                        {edge.weight}
-                      </text>
-                    )}
-                  </g>
-                )}
-              </g>
+              <EdgeItem
+                key={edge.id}
+                edge={edge}
+                from={from}
+                to={to}
+                isSelected={isSelected}
+                hasReverse={hasReverse}
+                directed={graph.directed}
+                weighted={graph.weighted}
+                editingEdgeId={editingEdgeId}
+                weightDraft={weightDraft}
+                startWeightEdit={startWeightEdit}
+                setWeightDraft={setWeightDraft}
+                setWeightError={setWeightError}
+                commitWeight={commitWeight}
+                setEditingEdgeId={setEditingEdgeId}
+                dispatch={dispatch}
+              />
             )
           })}
 
@@ -438,10 +637,11 @@ export function GraphCanvas() {
               >
                 <circle
                   r={NODE_RADIUS}
+                  fill={isSelected || isDraftStart ? "url(#node-gradient-selected)" : "url(#node-gradient)"}
                   className={`cursor-pointer transition-all duration-300 group-hover/node:scale-110 ${
                     isSelected || isDraftStart
-                      ? 'fill-indigo-900 stroke-purple-400'
-                      : 'fill-slate-900 stroke-indigo-500 hover:stroke-indigo-400'
+                      ? 'stroke-purple-400'
+                      : 'stroke-indigo-500 hover:stroke-indigo-400'
                   }`}
                   strokeWidth={isSelected || isDraftStart ? 3 : 2}
                   filter={isSelected || isDraftStart ? "url(#glow-selected)" : "url(#glow)"}
@@ -480,7 +680,18 @@ export function GraphCanvas() {
               </g>
             )
           })}
+          
+          {bursts.map(b => (
+            <ParticleBurst
+              key={b.id}
+              x={b.x}
+              y={b.y}
+              onComplete={() => setBursts(prev => prev.filter(p => p.id !== b.id))}
+            />
+          ))}
+          </g>
         </svg>
+        <GraphMetrics nodes={graph.nodes} edges={graph.edges} directed={graph.directed} />
       </div>
     </section>
   )

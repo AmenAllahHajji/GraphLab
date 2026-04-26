@@ -11,9 +11,22 @@ export function MatrixEditor() {
   const baseDraft = useMemo(() => graphToMatrixDraft(graph), [graph])
   const [draftOverride, setDraftOverride] = useState<string[][] | null>(null)
   const matrixDraft = draftOverride ?? baseDraft
+  const n = orderedNodes.length
+
+  // Dynamic scaling logic for responsiveness
+  const isLarge = n > 10
+  const isXLarge = n > 20
+  const isXXLarge = n > 35
+
+  const cellPadding = isXXLarge ? 'p-0.5' : isXLarge ? 'p-1' : isLarge ? 'p-1.5' : 'p-2'
+  const inputWidth = isXXLarge ? 'w-7' : isXLarge ? 'w-8' : isLarge ? 'w-10' : 'w-14'
+  const inputHeight = isXXLarge ? 'h-6' : isXLarge ? 'h-7' : isLarge ? 'h-8' : 'h-10'
+  const headerSize = isXXLarge ? 'w-4 h-4' : isXLarge ? 'w-5 h-5' : isLarge ? 'w-6 h-6' : 'w-8 h-8'
+  const fontSize = isXXLarge ? 'text-[8px]' : isXLarge ? 'text-[10px]' : isLarge ? 'text-xs' : 'text-sm'
+  const headerFontSize = isXXLarge ? 'text-[7px]' : isXLarge ? 'text-[9px]' : isLarge ? 'text-[11px]' : 'text-xs'
 
   return (
-    <section className="flex flex-col h-full rounded-2xl relative">
+    <section className="flex flex-col h-full rounded-2xl relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 rounded-2xl pointer-events-none"></div>
       
       <div className="p-4 md:p-6 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/40 rounded-t-2xl">
@@ -67,14 +80,14 @@ export function MatrixEditor() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 overflow-auto flex-grow relative">
+      <div className="p-4 md:p-6 overflow-auto flex-grow relative scrollbar-thin scrollbar-thumb-indigo-500/20 scrollbar-track-transparent">
         <div className="inline-block min-w-full rounded-xl border border-slate-700/50 overflow-hidden shadow-2xl bg-slate-950/80">
-          <table className="min-w-full border-collapse text-sm">
+          <table className="min-w-full border-collapse">
             <thead>
               <tr>
-                <th className="sticky top-0 left-0 z-20 bg-slate-900 border-b border-r border-slate-700/50 px-4 py-3 shadow-[2px_2px_4px_rgba(0,0,0,0.2)]">
-                  <div className="w-8 h-8 rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <th className={`sticky top-0 left-0 z-20 bg-slate-900 border-b border-r border-slate-700/50 ${cellPadding} shadow-[2px_2px_4px_rgba(0,0,0,0.2)]`}>
+                  <div className={`${headerSize} rounded-full bg-indigo-500/10 flex items-center justify-center mx-auto`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
                   </div>
@@ -82,9 +95,9 @@ export function MatrixEditor() {
                 {orderedNodes.map((nodeId) => (
                   <th
                     key={`head-${nodeId}`}
-                    className="sticky top-0 z-10 border-b border-slate-700/50 bg-slate-900 px-4 py-3 text-center shadow-[0_2px_4px_rgba(0,0,0,0.2)]"
+                    className={`sticky top-0 z-10 border-b border-slate-700/50 bg-slate-900 ${cellPadding} text-center shadow-[0_2px_4px_rgba(0,0,0,0.2)]`}
                   >
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 text-slate-200 font-bold border border-slate-700/50">
+                    <span className={`inline-flex items-center justify-center ${headerSize} rounded-full bg-slate-800 text-slate-200 font-bold border border-slate-700/50 ${headerFontSize}`}>
                       {nodeId}
                     </span>
                   </th>
@@ -94,8 +107,8 @@ export function MatrixEditor() {
             <tbody>
               {orderedNodes.map((rowNodeId, rowIndex) => (
                 <tr key={`row-${rowNodeId}`} className="hover:bg-indigo-500/5 transition-colors group">
-                  <th className="sticky left-0 z-10 border-r border-slate-700/50 bg-slate-900 px-4 py-3 text-center shadow-[2px_0_4px_rgba(0,0,0,0.2)] group-hover:bg-slate-800 transition-colors">
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 text-slate-200 font-bold border border-slate-700/50">
+                  <th className={`sticky left-0 z-10 border-r border-slate-700/50 bg-slate-900 ${cellPadding} text-center shadow-[2px_0_4px_rgba(0,0,0,0.2)] group-hover:bg-slate-800 transition-colors`}>
+                    <span className={`inline-flex items-center justify-center ${headerSize} rounded-full bg-slate-800 text-slate-200 font-bold border border-slate-700/50 ${headerFontSize}`}>
                       {rowNodeId}
                     </span>
                   </th>
@@ -103,10 +116,10 @@ export function MatrixEditor() {
                     const value = matrixDraft[rowIndex]?.[colIndex] ?? '0'
                     const isZero = value === '0' || value === ''
                     return (
-                      <td key={`${rowNodeId}-${columnNodeId}`} className="border border-slate-800/50 p-2 text-center transition-colors">
+                      <td key={`${rowNodeId}-${columnNodeId}`} className={`border border-slate-800/50 ${cellPadding} text-center transition-colors`}>
                         <input
                           inputMode="numeric"
-                          className={`w-16 rounded-md px-2 py-1.5 text-center font-medium transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:scale-110 shadow-inner ${
+                          className={`${inputWidth} ${inputHeight} rounded-md px-1 text-center font-medium transition-all focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:z-10 shadow-inner ${fontSize} ${
                             isZero 
                               ? 'bg-slate-900/50 border border-slate-800 text-slate-600 hover:bg-slate-800/80 hover:text-slate-400' 
                               : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'

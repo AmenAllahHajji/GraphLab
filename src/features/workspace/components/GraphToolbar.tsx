@@ -3,7 +3,7 @@ import { weightPolicyHint } from '../../graph/model/weightPolicy'
 
 export function GraphToolbar() {
   const dispatch = useGraphDispatch()
-  const { graph } = useGraphState()
+  const { graph, isDevMode } = useGraphState()
 
   return (
     <div className="glass-panel p-4 md:p-5">
@@ -84,6 +84,27 @@ export function GraphToolbar() {
               <span className="font-semibold text-indigo-400">{graph.edges.length}</span>
             </div>
           </div>
+
+          <div className="h-6 w-px bg-slate-700/50 hidden lg:block"></div>
+
+          <label className="flex items-center gap-3 cursor-pointer group">
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={isDevMode}
+                className="sr-only"
+                onChange={(event) =>
+                  dispatch({
+                    type: 'SET_DEV_MODE',
+                    payload: { isDevMode: event.currentTarget.checked },
+                  })
+                }
+              />
+              <div className={`block w-10 h-6 rounded-full transition-colors ${isDevMode ? 'bg-purple-500' : 'bg-slate-700'}`}></div>
+              <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${isDevMode ? 'transform translate-x-4' : ''}`}></div>
+            </div>
+            <span className="text-xs font-bold text-slate-300 group-hover:text-purple-400 transition-colors uppercase tracking-wider">Dev Mode</span>
+          </label>
 
           <button
             type="button"
