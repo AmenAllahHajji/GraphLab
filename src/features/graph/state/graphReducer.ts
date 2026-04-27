@@ -12,6 +12,7 @@ export type GraphAction =
     }
   | { type: 'ADD_NODE'; payload: { position: Position } }
   | { type: 'MOVE_NODE'; payload: { nodeId: NodeId; position: Position } }
+  | { type: 'SET_NODE_POSITIONS'; payload: { positions: Record<number, Position> } }
   | { type: 'START_EDGE_DRAFT'; payload: { from: NodeId } }
   | { type: 'CLEAR_EDGE_DRAFT' }
   | { type: 'ADD_EDGE'; payload: { from: NodeId; to: NodeId; weight?: number } }
@@ -222,6 +223,35 @@ export function graphReducer(
             ...state.graph.positions,
             [action.payload.nodeId]: action.payload.position,
           },
+        },
+      }
+    }
+
+    case 'SET_NODE_POSITIONS': {
+      const nextPositions = { ...state.graph.positions }
+      let changed = false
+
+      for (const nodeId of state.graph.nodes) {
+        const candidate = action.payload.positions[nodeId]
+        if (!candidate) {
+          continue
+        }
+        const current = nextPositions[nodeId]
+        if (!current || current.x !== candidate.x || current.y !== candidate.y) {
+          nextPositions[nodeId] = candidate
+          changed = true
+        }
+      }
+
+      if (!changed) {
+        return state
+      }
+
+      return {
+        ...state,
+        graph: {
+          ...state.graph,
+          positions: nextPositions,
         },
       }
     }

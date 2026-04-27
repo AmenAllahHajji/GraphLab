@@ -1,6 +1,7 @@
 import { GraphCanvas } from '../../graph-editor/components/GraphCanvas'
 import { useGraphState } from '../../graph/state/useGraphStore'
 import { MatrixEditor } from '../../matrix/components/MatrixEditor'
+import { CommandPalette } from './CommandPalette'
 import { GraphContractPanel } from './GraphContractPanel'
 import { GraphHistoryTimeline } from './GraphHistoryTimeline'
 import { GraphToolbar } from './GraphToolbar'
@@ -51,6 +52,7 @@ export function GraphWorkspace() {
         </div>
         
       </div>
+      <CommandPalette />
     </main>
   )
 }

@@ -1,7 +1,8 @@
 import { drag, type D3DragEvent } from 'd3-drag'
-import { zoom, type D3ZoomEvent } from 'd3-zoom'
+import { forceCenter, forceLink, forceManyBody, forceSimulation } from 'd3-force'
+import { zoom, zoomIdentity, type D3ZoomEvent } from 'd3-zoom'
 import { pointer, select } from 'd3-selection'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
   isWeightAllowed,
   parseWeightInput,
@@ -36,11 +37,15 @@ import './GraphCanvas.css'
 const CANVAS_WIDTH = 900
 const CANVAS_HEIGHT = 520
 const NODE_RADIUS = 20
+const MINIMAP_WIDTH = 120
+const MINIMAP_HEIGHT = 80
 
 interface EdgeGeometry {
   path: string
   labelX: number
   labelY: number
+  normalX: number
+  normalY: number
 }
 
 interface QueryHighlights {
@@ -103,6 +108,7 @@ function buildEdgeGeometry(
   to: { x: number; y: number },
   offset: number,
   directed: boolean,
+  bundleControl?: { x: number; y: number; spread: number },
 ): EdgeGeometry {
   const dx = to.x - from.x
   const dy = to.y - from.y
@@ -114,6 +120,8 @@ function buildEdgeGeometry(
       path: `M ${from.x} ${from.y - NODE_RADIUS} a ${loopRadius} ${loopRadius} 0 1 1 1 0`,
       labelX: from.x,
       labelY: from.y - NODE_RADIUS - loopRadius - 8,
+      normalX: 0,
+      normalY: -1,
     }
   }
 
@@ -131,8 +139,10 @@ function buildEdgeGeometry(
   const middleX = (startX + endX) / 2
   const middleY = (startY + endY) / 2
   const curveOffset = offset * 1.5
-  const controlX = middleX + nx * curveOffset
-  const controlY = middleY + ny * curveOffset
+  const controlX =
+    (bundleControl?.x ?? middleX) + nx * (curveOffset + (bundleControl?.spread ?? 0))
+  const controlY =
+    (bundleControl?.y ?? middleY) + ny * (curveOffset + (bundleControl?.spread ?? 0))
 
   const labelX = (startX + 2 * controlX + endX) / 4
   const labelY = (startY + 2 * controlY + endY) / 4
@@ -141,15 +151,15 @@ function buildEdgeGeometry(
     path: `M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`,
     labelX,
     labelY,
+    normalX: nx,
+    normalY: ny,
   }
 }
 
 function EdgeItem({
   edge,
-  from,
-  to,
+  geometry,
   isSelected,
-  hasReverse,
   directed,
   weighted,
   editingEdgeId,
@@ -162,9 +172,6 @@ function EdgeItem({
   dispatch
 }: any) {
   const pathRef = useRef<SVGPathElement>(null)
-  const signedOffset =
-    hasReverse && edge.from !== edge.to ? (edge.from < edge.to ? 16 : -16) : 0
-  const geometry = buildEdgeGeometry(from, to, signedOffset, directed)
 
   return (
     <g className="transition-opacity hover:opacity-80">
@@ -279,11 +286,15 @@ export function GraphCanvas() {
   const [cinemaStepIndex, setCinemaStepIndex] = useState(0)
   const [cinemaPlaying, setCinemaPlaying] = useState(false)
   const [cinemaSpeed, setCinemaSpeed] = useState(1)
+  const [autoLayoutRunning, setAutoLayoutRunning] = useState(false)
 
   const cycleFlashTimeoutRef = useRef<number | null>(null)
   const queryTimeoutRef = useRef<number | null>(null)
   const playbackIntervalRef = useRef<number | null>(null)
   const previousEdgesRef = useRef(graph.edges)
+  const simulationRef = useRef<ReturnType<typeof forceSimulation<{ id: number; x: number; y: number }>> | null>(null)
+  const zoomBehaviorRef = useRef<ReturnType<typeof zoom<SVGSVGElement, unknown>> | null>(null)
+  const zoomSelectionRef = useRef<ReturnType<typeof select<SVGSVGElement, unknown>> | null>(null)
 
   const positionsRef = useRef(graph.positions)
   useEffect(() => {
@@ -369,8 +380,41 @@ export function GraphCanvas() {
       if (playbackIntervalRef.current !== null) {
         window.clearInterval(playbackIntervalRef.current)
       }
+      simulationRef.current?.stop()
     }
   }, [])
+
+  useEffect(() => {
+    const onAutoLayout = () => runAutoLayout()
+    const onRunCinema = (event: Event) => {
+      const custom = event as CustomEvent<{
+        algorithm: CinemaAlgorithm
+        source: number
+        target?: number
+      }>
+      const detail = custom.detail
+      if (!detail) {
+        return
+      }
+      setCinemaAlgorithm(detail.algorithm)
+      setCinemaSourceNode(detail.source)
+      if (typeof detail.target === 'number') {
+        setCinemaTargetNode(detail.target)
+      }
+      const program = buildCinemaProgram(graph, detail.algorithm, detail.source, detail.target)
+      setCinemaProgram(program)
+      setCinemaStepIndex(0)
+      setCinemaPlaying(true)
+    }
+
+    window.addEventListener('graph:auto-layout', onAutoLayout)
+    window.addEventListener('graph:run-cinema', onRunCinema)
+
+    return () => {
+      window.removeEventListener('graph:auto-layout', onAutoLayout)
+      window.removeEventListener('graph:run-cinema', onRunCinema)
+    }
+  }, [graph])
 
   useShortcut('Escape', () => {
     if (interaction.edgeDraftFrom !== null) {
@@ -592,6 +636,69 @@ export function GraphCanvas() {
     scrubCinema(cinemaStepIndex + delta)
   }
 
+  function applyZoomTransform(next: { x: number; y: number; k: number }) {
+    const zoomBehavior = zoomBehaviorRef.current
+    const zoomSelection = zoomSelectionRef.current
+    if (!zoomBehavior || !zoomSelection) {
+      setTransform(next)
+      return
+    }
+    zoomSelection.call(zoomBehavior.transform, zoomIdentity.translate(next.x, next.y).scale(next.k))
+  }
+
+  function runAutoLayout() {
+    if (graph.nodes.length < 2) {
+      return
+    }
+
+    simulationRef.current?.stop()
+
+    const simNodes = graph.nodes.map((nodeId) => {
+      const position = graph.positions[nodeId]
+      return {
+        id: nodeId,
+        x: position?.x ?? CANVAS_WIDTH / 2,
+        y: position?.y ?? CANVAS_HEIGHT / 2,
+      }
+    })
+
+    const simulation = forceSimulation(simNodes)
+      .force('charge', forceManyBody().strength(-280))
+      .force('center', forceCenter(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2))
+      .force(
+        'link',
+        forceLink(
+          graph.edges.map((edge) => ({ source: edge.from, target: edge.to })),
+        )
+          .id((node) => (node as { id: number }).id)
+          .distance(120)
+          .strength(0.16),
+      )
+      .alpha(1)
+      .alphaDecay(0.035)
+
+    simulationRef.current = simulation
+    setAutoLayoutRunning(true)
+
+    simulation.on('tick', () => {
+      const positions: Record<number, { x: number; y: number }> = {}
+      for (const node of simNodes) {
+        const clampedX = Math.min(CANVAS_WIDTH - NODE_RADIUS, Math.max(NODE_RADIUS, node.x ?? 0))
+        const clampedY = Math.min(CANVAS_HEIGHT - NODE_RADIUS, Math.max(NODE_RADIUS, node.y ?? 0))
+        positions[node.id] = {
+          x: Math.round(clampedX),
+          y: Math.round(clampedY),
+        }
+      }
+      dispatch({ type: 'SET_NODE_POSITIONS', payload: { positions } })
+    })
+
+    simulation.on('end', () => {
+      simulationRef.current = null
+      setAutoLayoutRunning(false)
+    })
+  }
+
   useEffect(() => {
     if (svgRef.current === null) {
       return
@@ -600,6 +707,11 @@ export function GraphCanvas() {
     const selection = select(svgRef.current)
     const behavior = drag<SVGGElement, unknown>()
       .filter((event) => event.button === 0)
+      .on('start', () => {
+        simulationRef.current?.stop()
+        simulationRef.current = null
+        setAutoLayoutRunning(false)
+      })
       .on('drag', function onDrag(
         this: SVGGElement,
         event: D3DragEvent<SVGGElement, unknown, unknown>,
@@ -652,11 +764,15 @@ export function GraphCanvas() {
         setTransform(e.transform)
       })
 
-    selection.call(zoomBehavior).on("dblclick.zoom", null) // disable dblclick to zoom
+    zoomBehaviorRef.current = zoomBehavior
+    zoomSelectionRef.current = selection
+    selection.call(zoomBehavior).on('dblclick.zoom', null)
 
     return () => {
       selection.selectAll<SVGGElement, unknown>('g.node-wrapper').on('.drag', null)
       selection.on('.zoom', null)
+      zoomBehaviorRef.current = null
+      zoomSelectionRef.current = null
     }
   }, [dispatch, graph.nodes])
 
@@ -694,6 +810,61 @@ export function GraphCanvas() {
 
   const edgeGeometryById = useMemo(() => {
     const map = new Map<string, EdgeGeometry>()
+    const bundlesEnabled = graph.edges.length > 15
+
+    type BundleGroup = { angle: number; centerX: number; centerY: number; edgeIds: string[] }
+    const groups: BundleGroup[] = []
+    const bundleByEdgeId = new Map<string, { x: number; y: number; spread: number }>()
+
+    if (bundlesEnabled) {
+      for (const edge of graph.edges) {
+        const from = graph.positions[edge.from]
+        const to = graph.positions[edge.to]
+        if (!from || !to) {
+          continue
+        }
+        const angle = Math.atan2(to.y - from.y, to.x - from.x)
+        const centerX = (from.x + to.x) / 2
+        const centerY = (from.y + to.y) / 2
+
+        let matched: BundleGroup | undefined
+        for (const group of groups) {
+          const angleDelta = Math.abs(group.angle - angle)
+          const wrappedDelta = Math.min(angleDelta, Math.abs(Math.PI * 2 - angleDelta))
+          const centerDelta = Math.hypot(group.centerX - centerX, group.centerY - centerY)
+          if (wrappedDelta <= (15 * Math.PI) / 180 && centerDelta <= 40) {
+            matched = group
+            break
+          }
+        }
+
+        if (!matched) {
+          matched = { angle, centerX, centerY, edgeIds: [] }
+          groups.push(matched)
+        }
+
+        matched.edgeIds.push(edge.id)
+        const count = matched.edgeIds.length
+        matched.centerX = (matched.centerX * (count - 1) + centerX) / count
+        matched.centerY = (matched.centerY * (count - 1) + centerY) / count
+        matched.angle = (matched.angle * (count - 1) + angle) / count
+      }
+
+      for (const group of groups) {
+        if (group.edgeIds.length < 2) {
+          continue
+        }
+        group.edgeIds.forEach((edgeId, index) => {
+          const spread = (index - (group.edgeIds.length - 1) / 2) * 4
+          bundleByEdgeId.set(edgeId, {
+            x: group.centerX,
+            y: group.centerY,
+            spread,
+          })
+        })
+      }
+    }
+
     for (const edge of graph.edges) {
       const from = graph.positions[edge.from]
       const to = graph.positions[edge.to]
@@ -704,8 +875,26 @@ export function GraphCanvas() {
       const hasReverse = graph.directed && reverseEdgePairs.has(pairKey)
       const signedOffset =
         hasReverse && edge.from !== edge.to ? (edge.from < edge.to ? 16 : -16) : 0
-      map.set(edge.id, buildEdgeGeometry(from, to, signedOffset, graph.directed))
+      map.set(
+        edge.id,
+        buildEdgeGeometry(from, to, signedOffset, graph.directed, bundleByEdgeId.get(edge.id)),
+      )
     }
+
+    const geometryList = [...map.entries()]
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let i = 0; i < geometryList.length; i += 1) {
+        for (let j = i + 1; j < geometryList.length; j += 1) {
+          const second = geometryList[j][1]
+          const first = geometryList[i][1]
+          if (Math.hypot(first.labelX - second.labelX, first.labelY - second.labelY) < 30) {
+            second.labelX += second.normalX * 18
+            second.labelY += second.normalY * 18
+          }
+        }
+      }
+    }
+
     return map
   }, [graph.directed, graph.edges, graph.positions, reverseEdgePairs])
 
@@ -716,6 +905,49 @@ export function GraphCanvas() {
     }
     return diffGraphStates(previous.graph, graph)
   }, [graph, history.past])
+
+  const clusteringRegions = useMemo(() => {
+    const palette = ['#818cf8', '#34d399', '#fbbf24', '#fb7185', '#22d3ee']
+    return findComponents(graph).map((component, index) => {
+      const points = component
+        .map((nodeId) => graph.positions[nodeId])
+        .filter((position): position is { x: number; y: number } => typeof position === 'object')
+      if (points.length === 0) {
+        return null
+      }
+      const padding = 34
+      const minX = Math.min(...points.map((point) => point.x)) - padding
+      const maxX = Math.max(...points.map((point) => point.x)) + padding
+      const minY = Math.min(...points.map((point) => point.y)) - padding
+      const maxY = Math.max(...points.map((point) => point.y)) + padding
+      return {
+        id: `cluster-${index}`,
+        color: palette[index % palette.length],
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      }
+    })
+  }, [graph])
+
+  const minimapScaleX = MINIMAP_WIDTH / CANVAS_WIDTH
+  const minimapScaleY = MINIMAP_HEIGHT / CANVAS_HEIGHT
+  const viewportX = (-transform.x / transform.k) * minimapScaleX
+  const viewportY = (-transform.y / transform.k) * minimapScaleY
+  const viewportWidth = (CANVAS_WIDTH / transform.k) * minimapScaleX
+  const viewportHeight = (CANVAS_HEIGHT / transform.k) * minimapScaleY
+
+  function navigateFromMinimap(event: MouseEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const worldX = ((event.clientX - rect.left) / MINIMAP_WIDTH) * CANVAS_WIDTH
+    const worldY = ((event.clientY - rect.top) / MINIMAP_HEIGHT) * CANVAS_HEIGHT
+    applyZoomTransform({
+      k: transform.k,
+      x: CANVAS_WIDTH / 2 - worldX * transform.k,
+      y: CANVAS_HEIGHT / 2 - worldY * transform.k,
+    })
+  }
 
   return (
     <section className="flex flex-col h-full rounded-2xl relative overflow-hidden group">
@@ -730,6 +962,14 @@ export function GraphCanvas() {
               </svg>
               Visual Editor
             </h2>
+            <button
+              type="button"
+              className="glass-button px-3 py-1 text-xs"
+              onClick={runAutoLayout}
+              disabled={autoLayoutRunning}
+            >
+              {autoLayoutRunning ? 'Auto Layout Running...' : 'Auto Layout'}
+            </button>
             {interaction.edgeDraftFrom !== null && (
               <button
                 type="button"
@@ -834,9 +1074,11 @@ export function GraphCanvas() {
       <div className="flex-grow relative bg-slate-950/50 overflow-hidden">
         <svg
           ref={svgRef}
+          data-graph-canvas="main"
           className="w-full h-full cursor-crosshair min-h-[520px]"
           viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
           preserveAspectRatio="xMidYMid meet"
+          onDoubleClick={() => applyZoomTransform({ x: 0, y: 0, k: 1 })}
           onMouseMove={(event) => {
             if (interaction.edgeDraftFrom === null || svgRef.current === null) {
               return
@@ -941,6 +1183,27 @@ export function GraphCanvas() {
             
             <SnapGuides x={guides.x} y={guides.y} bounds={{ w: 10000, h: 10000 }} />
 
+            {clusteringRegions.map((region) => {
+              if (!region) {
+                return null
+              }
+              return (
+                <rect
+                  key={region.id}
+                  x={region.x}
+                  y={region.y}
+                  width={region.width}
+                  height={region.height}
+                  rx={26}
+                  fill={region.color}
+                  fillOpacity={0.08}
+                  stroke={region.color}
+                  strokeOpacity={0.28}
+                  className="cluster-region"
+                />
+              )
+            })}
+
             {queryHighlights?.components.map((component, index) => {
               const points = component
                 .map((nodeId) => graph.positions[nodeId])
@@ -975,26 +1238,19 @@ export function GraphCanvas() {
             })}
 
           {graph.edges.map((edge) => {
-            const from = graph.positions[edge.from]
-            const to = graph.positions[edge.to]
-
-            if (!from || !to) {
+            const geometry = edgeGeometryById.get(edge.id)
+            if (!geometry) {
               return null
             }
 
             const isSelected = interaction.selectedEdgeId === edge.id
-            const pairKey =
-              edge.from < edge.to ? `${edge.from}-${edge.to}` : `${edge.to}-${edge.from}`
-            const hasReverse = graph.directed && reverseEdgePairs.has(pairKey)
 
             return (
               <EdgeItem
                 key={edge.id}
                 edge={edge}
-                from={from}
-                to={to}
+                geometry={geometry}
                 isSelected={isSelected}
-                hasReverse={hasReverse}
                 directed={graph.directed}
                 weighted={graph.weighted}
                 editingEdgeId={editingEdgeId}
@@ -1105,6 +1361,24 @@ export function GraphCanvas() {
                 strokeWidth={4}
                 strokeLinecap="round"
                 opacity={0.7}
+              />
+            )
+          })}
+
+          {currentCinemaStep?.pathEdges?.map((edgeId) => {
+            const geometry = edgeGeometryById.get(edgeId)
+            if (!geometry) {
+              return null
+            }
+            return (
+              <path
+                key={`dfs-path-edge-${edgeId}-${cinemaStepIndex}`}
+                d={geometry.path}
+                fill="none"
+                stroke="#f59e0b"
+                strokeWidth={4}
+                strokeLinecap="round"
+                className="dfs-tendril"
               />
             )
           })}
@@ -1369,7 +1643,7 @@ export function GraphCanvas() {
                     fill="none"
                     stroke="#f59e0b"
                     strokeWidth={2}
-                    className="frontier-pulse"
+                    className={cinemaProgram?.algorithm === 'BFS' ? 'bfs-wavefront' : 'frontier-pulse'}
                   />
                 )}
                 {isCinemaCurrent && (
@@ -1412,6 +1686,60 @@ export function GraphCanvas() {
           )}
           </g>
         </svg>
+
+        <div className="absolute bottom-4 right-4 rounded-lg border border-slate-600/60 bg-slate-900/80 p-1.5 shadow-lg">
+          <svg
+            width={MINIMAP_WIDTH}
+            height={MINIMAP_HEIGHT}
+            viewBox={`0 0 ${MINIMAP_WIDTH} ${MINIMAP_HEIGHT}`}
+            className="cursor-pointer"
+            onClick={navigateFromMinimap}
+          >
+            <rect x={0} y={0} width={MINIMAP_WIDTH} height={MINIMAP_HEIGHT} fill="#020617" />
+            {graph.edges.map((edge) => {
+              const from = graph.positions[edge.from]
+              const to = graph.positions[edge.to]
+              if (!from || !to) {
+                return null
+              }
+              return (
+                <line
+                  key={`minimap-edge-${edge.id}`}
+                  x1={from.x * minimapScaleX}
+                  y1={from.y * minimapScaleY}
+                  x2={to.x * minimapScaleX}
+                  y2={to.y * minimapScaleY}
+                  stroke="rgba(129,140,248,0.45)"
+                  strokeWidth={1}
+                />
+              )
+            })}
+            {graph.nodes.map((nodeId) => {
+              const pos = graph.positions[nodeId]
+              if (!pos) {
+                return null
+              }
+              return (
+                <circle
+                  key={`minimap-node-${nodeId}`}
+                  cx={pos.x * minimapScaleX}
+                  cy={pos.y * minimapScaleY}
+                  r={2}
+                  fill="#e2e8f0"
+                />
+              )
+            })}
+            <rect
+              x={viewportX}
+              y={viewportY}
+              width={Math.min(MINIMAP_WIDTH, viewportWidth)}
+              height={Math.min(MINIMAP_HEIGHT, viewportHeight)}
+              fill="none"
+              stroke="#f8fafc"
+              strokeWidth={1.2}
+            />
+          </svg>
+        </div>
         <GraphMetrics nodes={graph.nodes} edges={graph.edges} directed={graph.directed} />
       </div>
     </section>

@@ -54,6 +54,17 @@
   50% { opacity: 1; }
 }
 
+@keyframes bfs-wave {
+  0% { opacity: 0.9; stroke-width: 1.5; }
+  100% { opacity: 0; stroke-width: 5; }
+}
+
+@keyframes dfs-scan {
+  0% { opacity: 0.15; }
+  50% { opacity: 0.95; }
+  100% { opacity: 0.2; }
+}
+
 .cycle-flash {
   animation: flash-green 1s ease-out forwards;
 }
@@ -94,5 +105,17 @@
 
 .flow-saturated {
   animation: saturated-edge 0.8s ease-in-out infinite;
+}
+
+.bfs-wavefront {
+  animation: bfs-wave 900ms ease-out infinite;
+}
+
+.dfs-tendril {
+  animation: dfs-scan 620ms ease-in-out infinite;
+}
+
+.cluster-region {
+  transition: x 220ms ease, y 220ms ease, width 220ms ease, height 220ms ease;
 }
 

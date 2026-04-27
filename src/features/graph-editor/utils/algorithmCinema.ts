@@ -17,6 +17,7 @@ export interface CinemaStep {
   flowByEdge?: Record<string, number>
   augmentingEdgeIds?: string[]
   saturatedEdgeIds?: string[]
+  pathEdges?: string[]
 }
 
 export interface CinemaProgram {
@@ -135,6 +136,7 @@ function buildDfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
   const steps: CinemaStep[] = []
   const visited = new Set<NodeId>()
   const treeEdges: string[] = []
+  const activePathEdges: string[] = []
 
   function dfs(nodeId: NodeId): void {
     visited.add(nodeId)
@@ -144,6 +146,7 @@ function buildDfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
       frontier: [nodeId],
       treeEdges: [...treeEdges],
       currentNode: nodeId,
+      pathEdges: [...activePathEdges],
     })
 
     for (const neighbor of neighborsFor(graph, nodeId)) {
@@ -154,17 +157,21 @@ function buildDfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
         treeEdges: [...treeEdges],
         currentNode: nodeId,
         currentEdgeId: neighbor.edgeId,
+        pathEdges: [...activePathEdges],
       })
 
       if (!visited.has(neighbor.nodeId)) {
         treeEdges.push(neighbor.edgeId)
+        activePathEdges.push(neighbor.edgeId)
         dfs(neighbor.nodeId)
+        activePathEdges.pop()
         steps.push({
           narration: `Backtrack to node ${nodeId}.`,
           visited: [...visited],
           frontier: [nodeId],
           treeEdges: [...treeEdges],
           currentNode: nodeId,
+          pathEdges: [...activePathEdges],
         })
       }
     }
@@ -176,6 +183,7 @@ function buildDfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     visited: [...visited],
     frontier: [],
     treeEdges: [...treeEdges],
+    pathEdges: [],
   })
 
   return steps
@@ -628,31 +636,24 @@ export function buildCinemaProgram(
   source: NodeId,
   target?: NodeId,
 ): CinemaProgram {
-  let steps: CinemaStep[] = []
-
-  switch (algorithm) {
-    case 'BFS':
-      steps = buildBfsProgram(graph, source)
-      break
-    case 'DFS':
-      steps = buildDfsProgram(graph, source)
-      break
-    case 'Dijkstra':
-      steps = buildDijkstraProgram(graph, source)
-      break
-    case 'Prims':
-      steps = buildPrimsProgram(graph, source)
-      break
-    case 'Kruskals':
-      steps = buildKruskalsProgram(graph)
-      break
-    case 'MaxFlow':
-      steps = buildMaxFlowProgram(graph, source, typeof target === 'number' ? target : source)
-      break
-    default:
-      steps = []
-      break
-  }
+  const steps: CinemaStep[] = (() => {
+    switch (algorithm) {
+      case 'BFS':
+        return buildBfsProgram(graph, source)
+      case 'DFS':
+        return buildDfsProgram(graph, source)
+      case 'Dijkstra':
+        return buildDijkstraProgram(graph, source)
+      case 'Prims':
+        return buildPrimsProgram(graph, source)
+      case 'Kruskals':
+        return buildKruskalsProgram(graph)
+      case 'MaxFlow':
+        return buildMaxFlowProgram(graph, source, typeof target === 'number' ? target : source)
+      default:
+        return []
+    }
+  })()
 
   return {
     algorithm,

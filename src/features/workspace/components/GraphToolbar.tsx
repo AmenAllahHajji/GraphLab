@@ -1,9 +1,51 @@
+import { useMemo, useState } from 'react'
 import { useGraphDispatch, useGraphState } from '../../graph/state/useGraphStore'
 import { weightPolicyHint } from '../../graph/model/weightPolicy'
+import {
+  formatGraphForExport,
+  type ExportFormat,
+  svgToPngBlob,
+} from '../utils/exportFormats'
 
 export function GraphToolbar() {
   const dispatch = useGraphDispatch()
   const { graph, isDevMode } = useGraphState()
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('json')
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle')
+
+  const exportText = useMemo(
+    () => formatGraphForExport(graph, exportFormat),
+    [exportFormat, graph],
+  )
+
+  async function copyExport() {
+    try {
+      await navigator.clipboard.writeText(exportText)
+      setCopyState('done')
+    } catch {
+      setCopyState('error')
+    }
+    window.setTimeout(() => setCopyState('idle'), 1200)
+  }
+
+  async function exportPng() {
+    const svg = document.querySelector('[data-graph-canvas="main"]') as SVGSVGElement | null
+    if (!svg) {
+      return
+    }
+
+    const blob = await svgToPngBlob(svg)
+    if (!blob) {
+      return
+    }
+
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'graph-lab.png'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="glass-panel p-4 md:p-5">
@@ -74,6 +116,15 @@ export function GraphToolbar() {
         </div>
 
         <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+          <button
+            type="button"
+            className="glass-button px-3 py-1.5 text-sm"
+            onClick={() => window.dispatchEvent(new CustomEvent('graph:auto-layout'))}
+            title="Force-Directed Auto Layout"
+          >
+            Auto Layout
+          </button>
+
           <div className="flex items-center gap-2 text-sm">
             <div className="flex items-center gap-1.5 bg-slate-800/80 border border-slate-700/50 rounded-lg px-3 py-1.5 shadow-inner">
               <span className="text-slate-400">Nodes</span>
@@ -130,6 +181,32 @@ export function GraphToolbar() {
             ? `${weightPolicyHint(graph.weightPolicy)}. Right-click a node or double-click an edge to delete.`
             : 'Unweighted mode keeps all edge weights at 1. Right-click node or double-click edge to delete.'}
         </p>
+      </div>
+
+      <div className="mt-3 grid gap-2 border-t border-slate-700/50 pt-3 md:grid-cols-[160px_1fr_auto_auto]">
+        <select
+          value={exportFormat}
+          className="glass-input px-3 py-1.5 text-xs"
+          onChange={(event) => setExportFormat(event.currentTarget.value as ExportFormat)}
+        >
+          <option value="json">JSON</option>
+          <option value="adjacency">Adjacency List</option>
+          <option value="edgelist">Edge List</option>
+          <option value="dot">DOT</option>
+          <option value="tikz">LaTeX TikZ</option>
+        </select>
+
+        <pre className="max-h-24 overflow-auto rounded-lg border border-slate-700/60 bg-slate-950/70 p-2 text-[11px] text-slate-300">
+          {exportText}
+        </pre>
+
+        <button type="button" className="glass-button px-3 py-1.5 text-xs" onClick={copyExport}>
+          {copyState === 'done' ? 'Copied!' : copyState === 'error' ? 'Copy failed' : 'Copy'}
+        </button>
+
+        <button type="button" className="glass-button px-3 py-1.5 text-xs" onClick={() => void exportPng()}>
+          PNG
+        </button>
       </div>
     </div>
   )
