@@ -67,6 +67,9 @@ export function AlgorithmCinemaPanel({
             <option value="Prims">Prim&apos;s</option>
             <option value="Kruskals">Kruskal&apos;s</option>
             <option value="MaxFlow">MaxFlow</option>
+            <option value="ConnectedComponents">Composantes Connexes</option>
+            <option value="SpanningForest">Forêt Couvrante</option>
+            <option value="StronglyConnectedComponents">Composantes Fortement Connexes</option>
           </select>
         </label>
 

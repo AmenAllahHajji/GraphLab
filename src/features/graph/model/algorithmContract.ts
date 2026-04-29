@@ -71,7 +71,10 @@ export interface KruskalsStep extends BaseAlgorithmStep { algorithm: 'Kruskals';
 export interface MaxFlowStep extends BaseAlgorithmStep { algorithm: 'MaxFlow'; }
 export interface TopoSortStep extends BaseAlgorithmStep { algorithm: 'TopologicalSort'; }
 export interface BellmanFordStep extends BaseAlgorithmStep { algorithm: 'BellmanFord'; }
-
+export interface ConnectedComponentsStep extends BaseAlgorithmStep { algorithm: 'ConnectedComponents'; }
+ 
+/** Tree edges are marked tree_edge; each component's tree gets a convex_hull highlight. */
+export interface SpanningForestStep extends BaseAlgorithmStep { algorithm: 'SpanningForest'; }
 export type AlgorithmStep = 
   | BfsStep 
   | DfsStep 
@@ -80,7 +83,9 @@ export type AlgorithmStep =
   | KruskalsStep 
   | MaxFlowStep 
   | TopoSortStep 
-  | BellmanFordStep;
+  | BellmanFordStep 
+  | ConnectedComponentsStep
+  | SpanningForestStep;
 
 export interface AlgorithmMetadata {
   algorithm: AlgorithmType;
@@ -94,7 +99,9 @@ export type AlgorithmResult =
   | { type: 'mst'; edgeIds: string[]; totalWeight: number }
   | { type: 'max_flow'; maxFlow: number }
   | { type: 'topo_order'; order: number[] }
-  | { type: 'cycle_detected'; message: string };
+  | { type: 'cycle_detected'; message: string }
+    | { type: 'components'; count: number; components: number[][] }
+  | { type: 'spanning_forest'; treeEdgeIds: string[]; componentCount: number };
 
 export interface AlgorithmCinemaPayload {
   metadata: AlgorithmMetadata;

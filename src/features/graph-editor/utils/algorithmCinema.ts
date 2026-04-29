@@ -1,6 +1,6 @@
 import type { GraphEdge, GraphState, NodeId } from '../../graph/model/types'
 
-export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow'
+export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest'| 'StronglyConnectedComponents'
 
 export interface CinemaStep {
   narration: string
@@ -630,6 +630,369 @@ function buildMaxFlowProgram(graph: GraphState, source: NodeId, target: NodeId):
   return steps
 }
 
+const COMPONENT_COLORS = [
+  '#3b82f6', // blue
+  '#f97316', // orange
+  '#22c55e', // green
+  '#a855f7', // purple
+  '#eab308', // yellow
+  '#06b6d4', // cyan
+  '#ec4899', // pink
+  '#84cc16', // lime
+]
+ 
+function buildConnectedComponentsProgram(graph: GraphState): CinemaStep[] {
+  const steps: CinemaStep[] = []
+  const visited = new Set<NodeId>()
+  // componentOf[nodeId] = index de la composante (0-based)
+  const componentOf: Record<NodeId, number> = {}
+  // componentMembers[i] = liste des noeuds de la composante i
+  const componentMembers: NodeId[][] = []
+  let componentIndex = 0
+ 
+  // ── Étape initiale ──────────────────────────────────────────────────────────
+  const allIdle: Record<number, { id: number; state: 'idle' }> = {}
+  for (const n of graph.nodes) allIdle[n] = { id: n, state: 'idle' }
+  const allEdgesIdle: Record<string, { id: string; state: 'idle' }> = {}
+  for (const e of graph.edges) allEdgesIdle[e.id] = { id: e.id, state: 'idle' }
+ 
+  steps.push({
+    narration: 'Début de la détection des composantes connexes. Chaque composante sera colorée différemment.',
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+    componentColors: { ...allIdle },   // on réutilise le champ visited/frontier
+    componentMap: {},
+  } as unknown as CinemaStep)
+ 
+  // Fonction utilitaire : construit le snapshot complet des noeuds
+  function buildNodeSnapshot(): Record<number, { id: number; state: string; badge?: string }> {
+    const snap: Record<number, { id: number; state: string; badge?: string }> = {}
+    for (const n of graph.nodes) {
+      if (typeof componentOf[n] === 'number') {
+        snap[n] = { id: n, state: 'visited', badge: `C${componentOf[n] + 1}` }
+      } else {
+        snap[n] = { id: n, state: 'idle' }
+      }
+    }
+    return snap
+  }
+ 
+  // Fonction utilitaire : construit les highlights convex_hull pour chaque composante découverte
+  function buildHighlights(): Array<{ type: 'convex_hull' | 'path_trace' | 'global_counter'; nodes?: number[]; value?: string | number; color?: string }> {
+    return componentMembers.map((members, idx) => ({
+      type: 'convex_hull' as const,
+      nodes: [...members],
+      color: COMPONENT_COLORS[idx % COMPONENT_COLORS.length],
+    }))
+  }
+ 
+  // ── Parcours principal ──────────────────────────────────────────────────────
+  for (const startNode of graph.nodes) {
+    if (visited.has(startNode)) continue
+ 
+    const members: NodeId[] = []
+    componentMembers.push(members)
+    const color = COMPONENT_COLORS[componentIndex % COMPONENT_COLORS.length]
+ 
+    const queue: NodeId[] = [startNode]
+    visited.add(startNode)
+    componentOf[startNode] = componentIndex
+    members.push(startNode)
+ 
+    // Étape : découverte du nœud racine de la nouvelle composante
+    const nodeSnap1 = buildNodeSnapshot()
+    nodeSnap1[startNode] = { id: startNode, state: 'visiting', badge: `C${componentIndex + 1}` }
+ 
+    steps.push({
+      narration: `Nouvelle composante C${componentIndex + 1} (${color}) — nœud source : ${startNode}.`,
+      visited: [...visited],
+      frontier: [startNode],
+      treeEdges: [],
+      _nodes: nodeSnap1,
+      _highlights: [...buildHighlights().slice(0, componentIndex), { type: 'convex_hull', nodes: [...members], color }],
+    } as unknown as CinemaStep)
+ 
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      const neighbors = neighborsFor(graph, current)
+ 
+      for (const { nodeId: neighbor, edgeId } of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor)
+          componentOf[neighbor] = componentIndex
+          members.push(neighbor)
+          queue.push(neighbor)
+ 
+          const nodeSnap = buildNodeSnapshot()
+          nodeSnap[neighbor] = { id: neighbor, state: 'visiting', badge: `C${componentIndex + 1}` }
+          nodeSnap[current] = { id: current, state: 'visited', badge: `C${componentIndex + 1}` }
+ 
+          steps.push({
+            narration: `Nœud ${neighbor} ajouté à C${componentIndex + 1} via l'arête (${current} → ${neighbor}).`,
+            visited: [...visited],
+            frontier: [...queue],
+            treeEdges: [],
+            currentNode: neighbor,
+            currentEdgeId: edgeId,
+            _nodes: nodeSnap,
+            _highlights: [...buildHighlights().slice(0, componentIndex), { type: 'convex_hull', nodes: [...members], color }],
+          } as unknown as CinemaStep)
+        }
+      }
+    }
+ 
+    // Étape : composante terminée
+    steps.push({
+      narration: `Composante C${componentIndex + 1} complète : {${members.join(', ')}}.`,
+      visited: [...visited],
+      frontier: [],
+      treeEdges: [],
+      _nodes: buildNodeSnapshot(),
+      _highlights: buildHighlights(),
+    } as unknown as CinemaStep)
+ 
+    componentIndex++
+  }
+ 
+  // ── Étape finale ────────────────────────────────────────────────────────────
+  steps.push({
+    narration: `Terminé ! ${componentIndex} composante(s) connexe(s) détectée(s).`,
+    visited: [...visited],
+    frontier: [],
+    treeEdges: [],
+    _nodes: buildNodeSnapshot(),
+    _highlights: [
+      ...buildHighlights(),
+      { type: 'global_counter', value: `${componentIndex} composante(s)` },
+    ],
+  } as unknown as CinemaStep)
+ 
+  return steps
+}
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// FORÊT COUVRANTE — DFS multi-source
+// Construit un arbre couvrant par composante connexe.
+// Les arêtes de l'arbre sont marquées tree_edge.
+// ─────────────────────────────────────────────────────────────────────────────
+function buildSpanningForestProgram(graph: GraphState): CinemaStep[] {
+  const steps: CinemaStep[] = []
+  const visited = new Set<NodeId>()
+  const forestEdgeIds: string[] = []
+  const componentOf: Record<NodeId, number> = {}
+  const componentMembers: NodeId[][] = []
+  let componentIndex = 0
+ 
+  // Snapshot helpers
+  function buildNodeSnapshot(visiting?: NodeId): Record<number, { id: number; state: string; badge?: string }> {
+    const snap: Record<number, { id: number; state: string; badge?: string }> = {}
+    for (const n of graph.nodes) {
+      if (n === visiting) {
+        snap[n] = { id: n, state: 'visiting', badge: `T${(componentOf[n] ?? componentIndex) + 1}` }
+      } else if (visited.has(n)) {
+        snap[n] = { id: n, state: 'visited', badge: `T${componentOf[n] + 1}` }
+      } else {
+        snap[n] = { id: n, state: 'idle' }
+      }
+    }
+    return snap
+  }
+ 
+  function buildEdgeSnapshot(activeEdgeId?: string): Record<string, { id: string; state: string }> {
+    const snap: Record<string, { id: string; state: string }> = {}
+    for (const e of graph.edges) {
+      if (forestEdgeIds.includes(e.id)) {
+        snap[e.id] = { id: e.id, state: e.id === activeEdgeId ? 'examining' : 'tree_edge' }
+      } else {
+        snap[e.id] = { id: e.id, state: 'idle' }
+      }
+    }
+    return snap
+  }
+ 
+  function buildHighlights(): Array<{ type: 'convex_hull'; nodes: number[]; color: string }> {
+    return componentMembers.map((members, idx) => ({
+      type: 'convex_hull' as const,
+      nodes: [...members],
+      color: COMPONENT_COLORS[idx % COMPONENT_COLORS.length],
+    }))
+  }
+ 
+  // Étape initiale
+  steps.push({
+    narration: 'Début de la construction de la forêt couvrante. Un arbre DFS par composante connexe.',
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+    _nodes: buildNodeSnapshot(),
+    _edges: buildEdgeSnapshot(),
+    _highlights: [],
+  } as unknown as CinemaStep)
+ 
+  for (const startNode of graph.nodes) {
+    if (visited.has(startNode)) continue
+ 
+    const members: NodeId[] = []
+    componentMembers.push(members)
+ 
+    const stack: NodeId[] = [startNode]
+    visited.add(startNode)
+    componentOf[startNode] = componentIndex
+    members.push(startNode)
+ 
+    steps.push({
+      narration: `Arbre T${componentIndex + 1} : DFS depuis le nœud racine ${startNode}.`,
+      visited: [...visited],
+      frontier: [startNode],
+      treeEdges: [...forestEdgeIds],
+      currentNode: startNode,
+      _nodes: buildNodeSnapshot(startNode),
+      _edges: buildEdgeSnapshot(),
+      _highlights: buildHighlights(),
+    } as unknown as CinemaStep)
+ 
+    while (stack.length > 0) {
+      const current = stack[stack.length - 1]!
+ 
+      // Chercher un voisin non visité
+      const unvisitedNeighbor = neighborsFor(graph, current).find(n => !visited.has(n.nodeId))
+ 
+      if (unvisitedNeighbor) {
+        const { nodeId: neighbor, edgeId } = unvisitedNeighbor
+        visited.add(neighbor)
+        componentOf[neighbor] = componentIndex
+        members.push(neighbor)
+        forestEdgeIds.push(edgeId)
+        stack.push(neighbor)
+ 
+        steps.push({
+          narration: `Arête (${current} → ${neighbor}) ajoutée à l'arbre T${componentIndex + 1}.`,
+          visited: [...visited],
+          frontier: [...stack],
+          treeEdges: [...forestEdgeIds],
+          currentNode: neighbor,
+          currentEdgeId: edgeId,
+          _nodes: buildNodeSnapshot(neighbor),
+          _edges: buildEdgeSnapshot(edgeId),
+          _highlights: buildHighlights(),
+        } as unknown as CinemaStep)
+      } else {
+        stack.pop()
+      }
+    }
+ 
+    steps.push({
+      narration: `Arbre T${componentIndex + 1} complet : {${members.join(', ')}}, ${forestEdgeIds.filter(eid => {
+        const e = graph.edges.find(x => x.id === eid)
+        return e && componentOf[e.from] === componentIndex
+      }).length} arête(s).`,
+      visited: [...visited],
+      frontier: [],
+      treeEdges: [...forestEdgeIds],
+      _nodes: buildNodeSnapshot(),
+      _edges: buildEdgeSnapshot(),
+      _highlights: buildHighlights(),
+    } as unknown as CinemaStep)
+ 
+    componentIndex++
+  }
+ 
+  // Étape finale
+  steps.push({
+    narration: `Forêt couvrante complète : ${componentIndex} arbre(s), ${forestEdgeIds.length} arête(s) au total.`,
+    visited: [...visited],
+    frontier: [],
+    treeEdges: [...forestEdgeIds],
+    _nodes: buildNodeSnapshot(),
+    _edges: buildEdgeSnapshot(),
+    _highlights: [
+      ...buildHighlights(),
+      { type: 'global_counter' as const, value: `${forestEdgeIds.length} arête(s) dans la forêt` },
+    ],
+  } as unknown as CinemaStep)
+ 
+  return steps
+}
+function buildStronglyConnectedComponentsProgram(graph: GraphState): CinemaStep[] {
+  const steps: CinemaStep[] = []
+
+  if (!graph.directed) {
+    steps.push({
+      narration: 'SCC nécessite un graphe orienté.',
+      visited: [],
+      frontier: [],
+      treeEdges: [],
+    })
+    return steps
+  }
+
+  const visited = new Set<NodeId>()
+  const stack: NodeId[] = []
+
+  function dfs(node: NodeId) {
+    visited.add(node)
+    for (const n of neighborsFor(graph, node)) {
+      if (!visited.has(n.nodeId)) dfs(n.nodeId)
+    }
+    stack.push(node)
+  }
+
+  // 1er passage
+  for (const node of graph.nodes) {
+    if (!visited.has(node)) dfs(node)
+  }
+
+  // Inverser le graphe
+  const reversed: GraphState = {
+    ...graph,
+    edges: graph.edges.map(e => ({
+      ...e,
+      from: e.to,
+      to: e.from,
+    })),
+  }
+
+  visited.clear()
+  let componentIndex = 0
+
+  function dfs2(node: NodeId, comp: NodeId[]) {
+    visited.add(node)
+    comp.push(node)
+
+    for (const n of neighborsFor(reversed, node)) {
+      if (!visited.has(n.nodeId)) dfs2(n.nodeId, comp)
+    }
+  }
+
+  while (stack.length > 0) {
+    const node = stack.pop()!
+
+    if (!visited.has(node)) {
+      const comp: NodeId[] = []
+      dfs2(node, comp)
+
+      steps.push({
+        narration: `Composante fortement connexe C${componentIndex + 1} : {${comp.join(', ')}}`,
+        visited: [...comp],
+        frontier: [],
+        treeEdges: [],
+      })
+
+      componentIndex++
+    }
+  }
+
+  steps.push({
+    narration: `Total SCC trouvées : ${componentIndex}`,
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+  })
+
+  return steps
+}
+ 
 export function buildCinemaProgram(
   graph: GraphState,
   algorithm: CinemaAlgorithm,
@@ -650,11 +1013,17 @@ export function buildCinemaProgram(
         return buildKruskalsProgram(graph)
       case 'MaxFlow':
         return buildMaxFlowProgram(graph, source, typeof target === 'number' ? target : source)
+      case 'ConnectedComponents':
+        return buildConnectedComponentsProgram(graph)
+      case 'SpanningForest':
+        return buildSpanningForestProgram(graph)
+      case 'StronglyConnectedComponents':
+  return buildStronglyConnectedComponentsProgram(graph)
       default:
         return []
     }
   })()
-
+ 
   return {
     algorithm,
     steps,
@@ -663,8 +1032,7 @@ export function buildCinemaProgram(
     graphSignature: graphSignature(graph),
   }
 }
-
+ 
 export function speedToInterval(speed: number): number {
   return Math.max(60, Math.round(900 / Math.max(0.25, speed)))
 }
-
