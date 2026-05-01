@@ -408,10 +408,25 @@ export function graphReducer(
       const edgeToDelete = state.graph.edges.find(e => e.id === action.payload.edgeId)
       if (!edgeToDelete) return state
 
-      const { symmetryKey } = edgeToDelete
-      const idsToRemove = symmetryKey
-        ? new Set(state.graph.edges.filter(e => e.symmetryKey === symmetryKey).map(e => e.id))
-        : new Set([action.payload.edgeId])
+      const idsToRemove = new Set<string>()
+      
+      if (!state.graph.directed) {
+        // In undirected mode, remove any edge between these two nodes to keep matrix in sync
+        state.graph.edges.forEach(e => {
+          if ((e.from === edgeToDelete.from && e.to === edgeToDelete.to) ||
+              (e.from === edgeToDelete.to && e.to === edgeToDelete.from)) {
+            idsToRemove.add(e.id)
+          }
+        })
+      } else {
+        // In directed mode, remove only the specific directed edge unless it's a symmetric pair
+        // created in undirected mode that we still want to treat as atomic.
+        // Actually, being precise is usually better in directed mode.
+        idsToRemove.add(edgeToDelete.id)
+        
+        // However, if it has a symmetryKey, we should probably check if we want to delete both.
+        // For now, let's stick to the specific ID to allow splitting pairs in directed mode.
+      }
 
       return {
         ...state,
