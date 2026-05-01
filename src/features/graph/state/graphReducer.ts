@@ -15,7 +15,7 @@ export type GraphAction =
   | { type: 'SET_NODE_POSITIONS'; payload: { positions: Record<number, Position> } }
   | { type: 'START_EDGE_DRAFT'; payload: { from: NodeId } }
   | { type: 'CLEAR_EDGE_DRAFT' }
-  | { type: 'ADD_EDGE'; payload: { from: NodeId; to: NodeId; weight?: number } }
+  | { type: 'ADD_EDGE'; payload: { from: NodeId; to: NodeId; weight?: number; directed?: boolean } }
   | { type: 'DELETE_NODE'; payload: { nodeId: NodeId } }
   | { type: 'DELETE_EDGE'; payload: { edgeId: string } }
   | { type: 'SET_EDGE_WEIGHT'; payload: { edgeId: string; weight: number } }
@@ -277,12 +277,15 @@ export function graphReducer(
     }
 
     case 'ADD_EDGE': {
-      const { from, to } = action.payload
+      const { from, to, directed } = action.payload
+
+      // If the edge creation specifies a directed flag, use it, otherwise fallback to the graph's directed state.
+      const isDirected = directed ?? state.graph.directed
 
       if (
         !state.graph.nodes.includes(from) ||
         !state.graph.nodes.includes(to) ||
-        edgeExists(state.graph.edges, from, to, state.graph.directed)
+        edgeExists(state.graph.edges, from, to, isDirected)
       ) {
         return {
           ...state,
@@ -293,28 +296,64 @@ export function graphReducer(
         }
       }
 
-      const edge: GraphEdge = {
-        id: `e${state.graph.nextEdgeId}`,
-        from,
-        to,
-        weight: normalizedWeight(
-          state.graph.weighted,
-          action.payload.weight,
-          state.graph.weightPolicy,
-        ),
-      }
+      const weight = normalizedWeight(
+        state.graph.weighted,
+        action.payload.weight,
+        state.graph.weightPolicy,
+      )
 
-      return {
-        ...state,
-        graph: {
-          ...state.graph,
-          edges: [...state.graph.edges, edge],
-          nextEdgeId: state.graph.nextEdgeId + 1,
-        },
-        interaction: {
-          ...state.interaction,
-          edgeDraftFrom: null,
-        },
+      if (isDirected) {
+        const edge: GraphEdge = {
+          id: `e${state.graph.nextEdgeId}`,
+          from,
+          to,
+          weight,
+          directed: true,
+        }
+
+        return {
+          ...state,
+          graph: {
+            ...state.graph,
+            edges: [...state.graph.edges, edge],
+            nextEdgeId: state.graph.nextEdgeId + 1,
+          },
+          interaction: {
+            ...state.interaction,
+            edgeDraftFrom: null,
+          },
+        }
+      } else {
+        const symmetryKey = `sym-${state.graph.nextEdgeId}`
+        const edge1: GraphEdge = {
+          id: `e${state.graph.nextEdgeId}`,
+          from,
+          to,
+          weight,
+          directed: false,
+          symmetryKey,
+        }
+        const edge2: GraphEdge = {
+          id: `e${state.graph.nextEdgeId + 1}`,
+          from: to,
+          to: from,
+          weight,
+          directed: false,
+          symmetryKey,
+        }
+
+        return {
+          ...state,
+          graph: {
+            ...state.graph,
+            edges: [...state.graph.edges, edge1, edge2],
+            nextEdgeId: state.graph.nextEdgeId + 2,
+          },
+          interaction: {
+            ...state.interaction,
+            edgeDraftFrom: null,
+          },
+        }
       }
     }
 
@@ -366,18 +405,41 @@ export function graphReducer(
     }
 
     case 'DELETE_EDGE': {
+      const edgeToDelete = state.graph.edges.find(e => e.id === action.payload.edgeId)
+      if (!edgeToDelete) return state
+
+      const idsToRemove = new Set<string>()
+      
+      if (!state.graph.directed) {
+        // In undirected mode, remove any edge between these two nodes to keep matrix in sync
+        state.graph.edges.forEach(e => {
+          if ((e.from === edgeToDelete.from && e.to === edgeToDelete.to) ||
+              (e.from === edgeToDelete.to && e.to === edgeToDelete.from)) {
+            idsToRemove.add(e.id)
+          }
+        })
+      } else {
+        // In directed mode, remove only the specific directed edge unless it's a symmetric pair
+        // created in undirected mode that we still want to treat as atomic.
+        // Actually, being precise is usually better in directed mode.
+        idsToRemove.add(edgeToDelete.id)
+        
+        // However, if it has a symmetryKey, we should probably check if we want to delete both.
+        // For now, let's stick to the specific ID to allow splitting pairs in directed mode.
+      }
+
       return {
         ...state,
         graph: {
           ...state.graph,
           edges: state.graph.edges.filter(
-            (edge) => edge.id !== action.payload.edgeId,
+            (edge) => !idsToRemove.has(edge.id),
           ),
         },
         interaction: {
           ...state.interaction,
           selectedEdgeId:
-            state.interaction.selectedEdgeId === action.payload.edgeId
+            state.interaction.selectedEdgeId && idsToRemove.has(state.interaction.selectedEdgeId)
               ? null
               : state.interaction.selectedEdgeId,
         },

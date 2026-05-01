@@ -1,5 +1,47 @@
 import type { GraphEdge, GraphState, NodeId } from '../model/types'
 
+export interface VisualEdge extends GraphEdge {
+  visualId: string
+  hasArrow: boolean
+}
+
+export function getVisualEdges(edges: GraphEdge[], isGraphDirected: boolean): VisualEdge[] {
+  const visualEdges: VisualEdge[] = []
+  
+  if (isGraphDirected) {
+    // In directed mode, we show every edge individually with its own arrow
+    for (const edge of edges) {
+      visualEdges.push({
+        ...edge,
+        visualId: edge.id,
+        hasArrow: true,
+      })
+    }
+    return visualEdges
+  }
+
+  // In undirected mode, we collapse any pairs between the same nodes into a single visual line
+  const seenPairs = new Set<string>()
+  
+  for (const edge of edges) {
+    // Create a canonical key for the node pair (order doesn't matter)
+    const pairKey = [edge.from, edge.to].sort((a, b) => a - b).join('-')
+    
+    if (seenPairs.has(pairKey)) {
+      continue
+    }
+    
+    seenPairs.add(pairKey)
+    visualEdges.push({
+      ...edge,
+      visualId: edge.symmetryKey || `v-${edge.id}`,
+      hasArrow: false,
+    })
+  }
+
+  return visualEdges
+}
+
 export function sortedNodes(nodes: NodeId[]): NodeId[] {
   return [...nodes].sort((left, right) => left - right)
 }

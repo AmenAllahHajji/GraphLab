@@ -1,6 +1,6 @@
 import type { GraphEdge, GraphState, NodeId } from '../../graph/model/types'
 
-export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest'| 'StronglyConnectedComponents'
+export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest' | 'StronglyConnectedComponents' | 'Bellman' | 'BellmanFord' | 'WelshPowell' | 'EulerienPath'
 
 export interface CinemaStep {
   narration: string
@@ -42,7 +42,7 @@ function graphSignature(graph: GraphState): string {
   return `${graph.directed ? 'D' : 'U'}|${graph.weighted ? 'W' : 'N'}|${graph.nodes.join(',')}|${edges}`
 }
 
-function neighborsFor(graph: GraphState, nodeId: NodeId): WeightedNeighbor[] {
+function neighborsFor(graph: GraphState, nodeId: NodeId, ignoreDirection = false): WeightedNeighbor[] {
   const neighbors: WeightedNeighbor[] = []
   for (const edge of graph.edges) {
     if (edge.from === nodeId) {
@@ -52,7 +52,7 @@ function neighborsFor(graph: GraphState, nodeId: NodeId): WeightedNeighbor[] {
         weight: graph.weighted ? edge.weight : 1,
       })
     }
-    if (!graph.directed && edge.to === nodeId) {
+  if ((ignoreDirection || !graph.directed) && edge.to === nodeId) {
       neighbors.push({
         nodeId: edge.from,
         edgeId: edge.id,
@@ -95,7 +95,7 @@ function buildBfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
       continue
     }
 
-    const neighbors = neighborsFor(graph, current)
+    const neighbors = neighborsFor(graph, current, true)
     for (const neighbor of neighbors) {
       steps.push({
         narration: `Inspect edge ${current}->${neighbor.nodeId}.`,
@@ -715,7 +715,7 @@ function buildConnectedComponentsProgram(graph: GraphState): CinemaStep[] {
  
     while (queue.length > 0) {
       const current = queue.shift()!
-      const neighbors = neighborsFor(graph, current)
+     const neighbors = neighborsFor(graph, current, true) 
  
       for (const { nodeId: neighbor, edgeId } of neighbors) {
         if (!visited.has(neighbor)) {
