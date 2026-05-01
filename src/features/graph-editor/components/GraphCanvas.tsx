@@ -202,7 +202,10 @@ function EdgeItem({
         markerEnd={directed ? (isSelected ? 'url(#arrow-selected)' : 'url(#arrow)') : undefined}
       />
       
-      <EdgeFlowParticles pathRef={pathRef} speed={directed ? 1 : 0.8} isActive={true} />
+      <EdgeFlowParticles pathRef={pathRef} speed={directed ? 1.2 : 0.8} isActive={true} />
+      {!directed && (
+        <EdgeFlowParticles pathRef={pathRef} speed={0.8} isActive={true} reverse={true} />
+      )}
       <EdgePulse d={geometry.path} color={isSelected ? "#c084fc" : "#00ffcc"} />
       
       {weighted && (
@@ -814,7 +817,7 @@ export function GraphCanvas() {
       ? cinemaProgram.steps[Math.max(0, Math.min(cinemaStepIndex, cinemaProgram.steps.length - 1))]
       : null
 
-  const visualEdges = useMemo(() => getVisualEdges(graph.edges), [graph.edges])
+  const visualEdges = useMemo(() => getVisualEdges(graph.edges, graph.directed), [graph.edges, graph.directed])
 
   const edgeGeometryById = useMemo(() => {
     const map = new Map<string, EdgeGeometry>()
