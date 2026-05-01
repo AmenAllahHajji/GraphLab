@@ -11,17 +11,26 @@ function detectGraphTypes(
   nodes: NodeId[],
   edges: GraphEdge[],
   directed: boolean,
+  logicalEdgeCount: number,
 ): { label: string; color: string }[] {
   const n = nodes.length;
   const types: { label: string; color: string }[] = [];
   if (n === 0) return types;
 
-  // Degré de chaque nœud
+  // ── Degree calculation (Mode-aware)
   const degree: Record<number, number> = {};
   for (const node of nodes) { degree[node] = 0; }
+  
+  const seenForDegree = new Set<string>();
   for (const e of edges) {
-    degree[e.from]    = (degree[e.from]    ?? 0) + 1;
-    if (!directed) degree[e.to] = (degree[e.to] ?? 0) + 1;
+    const key = directed ? `d-${e.from}-${e.to}` : `u-${[e.from, e.to].sort().join('-')}`;
+    if (seenForDegree.has(key)) continue;
+    seenForDegree.add(key);
+    
+    degree[e.from] = (degree[e.from] ?? 0) + 1;
+    if (!directed && e.from !== e.to) {
+      degree[e.to] = (degree[e.to] ?? 0) + 1;
+    }
   }
 
   // ── Orienté / Non-orienté
@@ -32,17 +41,17 @@ function detectGraphTypes(
 
   // ── Complet
   const maxEdges = directed ? n * (n - 1) : (n * (n - 1)) / 2;
-  if (n > 1 && edges.length === maxEdges) {
+  if (n > 1 && logicalEdgeCount === maxEdges) {
     types.push({ label: 'Complet', color: '#f59e0b' });
   }
 
   // ── Régulier
   const degrees = Object.values(degree);
-  if (degrees.every(d => d === degrees[0]) && degrees[0] > 0) {
+  if (n > 0 && degrees.every(d => d === degrees[0]) && degrees[0] > 0) {
     types.push({ label: `${degrees[0]}-Régulier`, color: '#22d3ee' });
   }
 
-  // ── Bipartie (BFS 2-coloration)
+  // ── Bipartie
   const color2: Record<number, number> = {};
   let isBipartite = true;
   for (const start of nodes) {
@@ -52,38 +61,42 @@ function detectGraphTypes(
     while (queue.length > 0 && isBipartite) {
       const cur = queue.shift()!;
       for (const e of edges) {
-        const nb = e.from === cur ? e.to : (!directed && e.to === cur ? e.from : null);
-        if (nb === null) continue;
-        if (color2[nb] === undefined) { color2[nb] = 1 - color2[cur]; queue.push(nb); }
-        else if (color2[nb] === color2[cur]) isBipartite = false;
+        let nb: number | null = null;
+        if (e.from === cur) nb = e.to;
+        else if (!directed && e.to === cur) nb = e.from;
+        
+        if (nb === null || nb === cur) continue; // Ignore self-loops for bipartition
+        
+        if (color2[nb] === undefined) { 
+          color2[nb] = 1 - color2[cur]; 
+          queue.push(nb); 
+        } else if (color2[nb] === color2[cur]) {
+          isBipartite = false;
+        }
       }
     }
   }
-  if (isBipartite && edges.length > 0) {
+  
+  if (isBipartite && logicalEdgeCount > 0) {
     const gA = nodes.filter(nd => color2[nd] === 0);
     const gB = nodes.filter(nd => color2[nd] === 1);
-    const biMax = directed ? gA.length * gB.length * 2 : gA.length * gB.length;
     if (gA.length > 0 && gB.length > 0) {
-      types.push(edges.length === biMax
+      const isCompleteBipartite = logicalEdgeCount === (gA.length * gB.length);
+      types.push(isCompleteBipartite 
         ? { label: 'Bipartie complet', color: '#34d399' }
-        : { label: 'Bipartie',         color: '#6ee7b7' }
+        : { label: 'Bipartie', color: '#6ee7b7' }
       );
     }
   }
 
-
-
-
-
-  // ── Planaire : condition nécessaire e ≤ 3n − 6
-  if (n <= 2) {
+  // ── Planaire (Euler's formula e <= 3n - 6)
+  if (n > 2 && !directed && logicalEdgeCount <= 3 * n - 6) {
     types.push({ label: 'Planaire', color: '#fb923c' });
-  } else if (!directed && edges.length <= 3 * n - 6) {
+  } else if (n <= 2) {
     types.push({ label: 'Planaire', color: '#fb923c' });
   }
 
-  // ── Graphe nul
-  if (edges.length === 0) types.push({ label: 'Graphe nul', color: '#64748b' });
+  if (logicalEdgeCount === 0) types.push({ label: 'Graphe nul', color: '#64748b' });
 
   return types;
 }
@@ -91,12 +104,23 @@ function detectGraphTypes(
 export const GraphMetrics: React.FC<GraphMetricsProps> = ({ nodes, edges, directed }) => {
   const metrics = useMemo(() => {
     const nodeCount = nodes.length;
-    const edgeCount = edges.length;
-    let maxEdges = nodeCount > 1 ? nodeCount * (nodeCount - 1) : 1;
-    if (!directed) maxEdges = maxEdges / 2;
-    const density = nodeCount > 1 ? ((edgeCount / maxEdges) * 100).toFixed(1) : 0;
-    const types = detectGraphTypes(nodes, edges, directed);
-    return { nodeCount, edgeCount, density, types };
+    
+    // Count unique logical edges
+    const seen = new Set<string>();
+    let logicalEdgeCount = 0;
+    for (const e of edges) {
+      const key = directed ? `${e.from}->${e.to}` : [e.from, e.to].sort().join('-');
+      if (!seen.has(key)) {
+        seen.add(key);
+        logicalEdgeCount++;
+      }
+    }
+    
+    const maxEdges = nodeCount > 1 ? (directed ? nodeCount * (nodeCount - 1) : (nodeCount * (nodeCount - 1)) / 2) : 1;
+    const density = nodeCount > 1 ? ((logicalEdgeCount / maxEdges) * 100).toFixed(1) : 0;
+    const types = detectGraphTypes(nodes, edges, directed, logicalEdgeCount);
+    
+    return { nodeCount, edgeCount: logicalEdgeCount, density, types };
   }, [nodes, edges, directed]);
 
   return (
