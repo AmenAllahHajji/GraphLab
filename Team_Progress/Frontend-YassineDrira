@@ -43,3 +43,25 @@
 ## 🐛 Bug Fixes & Issue Resolution (Sprint 4 Polish)
 - **Camera Coordinate Mapping:** Resolved a critical bug where adding nodes after zooming/panning resulted in incorrect placements. Re-engineered the point-transformation logic to manually apply the zoom matrix to viewport clicks.
 - **Event Filtering for Right-Click:** Fixed an issue where the camera engine swallowed right-click events. Injected explicit event filters into the D3 zoom/drag behavior to ignore button 2, restoring standard React `onContextMenu` functionality for node deletion.
+
+### Session Update: May 1, 2026 - Glassmorphic Restoration & Logical Hardening
+
+#### 1. UI/UX Restoration (The "Glassmorphic Recovery")
+- **Full System Recovery**: Successfully restored the "Late-era Glassmorphic Futurism" UI after a critical Git reset. 
+- **Premium Components**: Re-applied high-end styling to `GraphWorkspace`, `MatrixEditor`, `AlgorithmCinemaPanel`, and `GraphToolbar`.
+- **Dynamic Aesthetics**: Restored animated glass panels, backdrop blurs, and the bespoke CSS design system (Tailwind v4 compatible).
+
+#### 2. Directed/Undirected Logic Synchronization
+- **Symmetric Edge Logic**: Implemented atomic symmetric pairs (A→B and B→A) for undirected modes to ensure the Adjacency Matrix and Graph Canvas are always in sync.
+- **Bidirectional Animations**: Added support for bidirectional particle flow (`EdgeFlowParticles`) to visually represent undirected connections.
+- **Mode-Aware Actions**: Updated `ADD_EDGE` and `DELETE_EDGE` reducers to handle mode-specific requirements, ensuring database-level consistency between the two representations.
+
+#### 3. Mathematical Metrics Hardening
+- **Logical Edge Counting**: Resolved the "166% Density" bug by implementing a unique-pair registry for edge counting. Metrics now correctly treat undirected pairs as a single logical edge.
+- **Graph Type Detection**: Fixed "Complet", "Régulier", and "Planaire" detection logic. $K_3$ and other standard graphs now report 100% accurate density and types.
+- **Self-Loop Support**: Hardened the system to handle self-loops in both directed and undirected modes without breaking mathematical invariants.
+
+#### 4. Git & Workflow
+- **Conflict Resolution**: Managed complex merge conflicts between the `ui-ux-enhancements` branch and `origin main`.
+- **State Stabilization**: Synchronized the local development environment with the remote repository while preserving 15+ custom UI commits.
+
