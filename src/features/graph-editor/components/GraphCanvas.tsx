@@ -26,9 +26,11 @@ import { SnapGuides } from './SnapGuides'
 import { AlgorithmCinemaPanel } from './AlgorithmCinemaPanel'
 import { calculateSnap } from '../hooks/useMagneticSnap'
 import { CanvasHelp } from '../../workspace/components/CanvasHelp'
+import { CanvasToolbar } from './CanvasToolbar'
 import { useShortcut } from '../../../shared/hooks/useShortcut'
 import { useI18n } from '../../../shared/context/I18nContext'
 import { useAppTheme } from '../../../shared/context/AppThemeContext'
+import { svgToPngBlob } from '../../workspace/utils/exportFormats'
 import {
   buildCinemaProgram,
   speedToInterval,
@@ -322,6 +324,13 @@ export function GraphCanvas() {
   const [cinemaSpeed, setCinemaSpeed] = useState(1)
   const [autoLayoutRunning, setAutoLayoutRunning] = useState(false)
   const [edgeDraftDirected, setEdgeDraftDirected] = useState(graph.directed)
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+
+  useEffect(() => {
+    const onStatus = (e: any) => setIsCommandPaletteOpen(e.detail.open)
+    window.addEventListener('graph:command-palette-status', onStatus)
+    return () => window.removeEventListener('graph:command-palette-status', onStatus)
+  }, [])
 
   useEffect(() => {
     setEdgeDraftDirected(graph.directed)
@@ -927,20 +936,6 @@ export function GraphCanvas() {
       }
     }
 
-    const geometryList = [...map.entries()]
-    for (let pass = 0; pass < 2; pass += 1) {
-      for (let i = 0; i < geometryList.length; i += 1) {
-        for (let j = i + 1; j < geometryList.length; j += 1) {
-          const second = geometryList[j][1]
-          const first = geometryList[i][1]
-          if (Math.hypot(first.labelX - second.labelX, first.labelY - second.labelY) < 30) {
-            second.labelX += second.normalX * 18
-            second.labelY += second.normalY * 18
-          }
-        }
-      }
-    }
-
     return map
   }, [graph.directed, graph.edges, graph.positions, reverseEdgePairs])
 
@@ -1151,6 +1146,7 @@ export function GraphCanvas() {
             }
           }}
           onScrub={scrubCinema}
+          currentStep={currentCinemaStep}
         />
 
         {queryHighlights !== null && (
@@ -1243,6 +1239,9 @@ export function GraphCanvas() {
                 
                 setEditingEdgeId(null)
                 setWeightError(null)
+
+                // deselect find node after interaction
+                window.dispatchEvent(new CustomEvent('toolbar:close-search'))
               }}
             />
             
@@ -1331,24 +1330,6 @@ export function GraphCanvas() {
             )
           })}
 
-          {historyDiff.addedEdges.map((edgeId) => {
-            const geometry = edgeGeometryById.get(edgeId)
-            if (!geometry) {
-              return null
-            }
-            return (
-              <path
-                key={`added-edge-${edgeId}`}
-                d={geometry.path}
-                fill="none"
-                stroke="#4ade80"
-                strokeWidth={4}
-                strokeLinecap="round"
-                opacity={0.5}
-                className="history-added-edge"
-              />
-            )
-          })}
 
           {historyDiff.removedEdges.map((edgeId) => {
             const previous = history.past[history.past.length - 1]
@@ -1672,18 +1653,15 @@ export function GraphCanvas() {
                         directed: edgeDraftDirected,
                       },
                     })
+                    // Clear selection states to remove "active" effects
+                    dispatch({ type: 'SET_SELECTED_NODE', payload: { nodeId: null } })
+                    dispatch({ type: 'SET_SELECTED_EDGE', payload: { edgeId: null } })
+                    dispatch({ type: 'CLEAR_EDGE_DRAFT' })
+                    
+                    const closeSearchEvent = new CustomEvent('toolbar:close-search')
+                    window.dispatchEvent(closeSearchEvent)
                   }}
                 />
-                {isAddedNode && (
-                  <circle
-                    r={NODE_RADIUS + 7}
-                    fill="none"
-                    stroke="#4ade80"
-                    strokeWidth={2.5}
-                    opacity={0.65}
-                    className="history-added-node"
-                  />
-                )}
                 {shouldShowHalo && (
                   <circle
                     r={haloRadius}
@@ -1830,6 +1808,75 @@ export function GraphCanvas() {
           </svg>
         </div>
         <GraphMetrics nodes={graph.nodes} edges={graph.edges} directed={graph.directed} />
+        
+        <CanvasToolbar
+          onAddNode={() => {
+            const viewportX = CANVAS_WIDTH / 2
+            const viewportY = CANVAS_HEIGHT / 2
+            let worldX = (viewportX - transform.x) / transform.k
+            let worldY = (viewportY - transform.y) / transform.k
+            const collided = applyCollisions(worldX, worldY, null, graph.nodes, positionsRef.current, 55)
+            dispatch({ type: 'ADD_NODE', payload: { position: { x: collided.x, y: collided.y } } })
+            
+            // deselect find node
+            window.dispatchEvent(new CustomEvent('toolbar:close-search'))
+          }}
+          onDeleteSelected={() => {
+            if (interaction.selectedNodeId !== null) {
+              dispatch({ type: 'DELETE_NODE', payload: { nodeId: interaction.selectedNodeId } })
+            } else if (interaction.selectedEdgeId !== null) {
+              dispatch({ type: 'DELETE_EDGE', payload: { edgeId: interaction.selectedEdgeId } })
+            }
+          }}
+          onUndo={() => dispatch({ type: 'UNDO' })}
+          onRedo={() => dispatch({ type: 'REDO' })}
+          onFindNode={(id) => {
+            const nodeId = Number(id)
+            if (graph.nodes.includes(nodeId)) {
+              const pos = graph.positions[nodeId]
+              if (pos) {
+                applyZoomTransform({ x: CANVAS_WIDTH / 2 - pos.x * 1, y: CANVAS_HEIGHT / 2 - pos.y * 1, k: 1 })
+                dispatch({ type: 'SET_SELECTED_NODE', payload: { nodeId } })
+              }
+            }
+          }}
+          onScreenshot={async () => {
+            if (svgRef.current) {
+              const blob = await svgToPngBlob(svgRef.current)
+              if (blob) {
+                const url = URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                link.download = 'graphlab-screenshot.png'
+                link.click()
+                URL.revokeObjectURL(url)
+              }
+            }
+          }}
+          onResetView={() => applyZoomTransform({ x: 0, y: 0, k: 1 })}
+          onZoomIn={() => {
+            const behavior = zoomBehaviorRef.current
+            const selection = zoomSelectionRef.current
+            if (behavior && selection) {
+              selection.transition().duration(250).call(behavior.scaleBy, 1.3)
+            }
+          }}
+          onZoomOut={() => {
+            const behavior = zoomBehaviorRef.current
+            const selection = zoomSelectionRef.current
+            if (behavior && selection) {
+              selection.transition().duration(250).call(behavior.scaleBy, 0.7)
+            }
+          }}
+          onOpenCommandPalette={() => {
+            window.dispatchEvent(new CustomEvent('graph:open-command-palette'))
+          }}
+          canUndo={history.past.length > 0}
+          canRedo={history.future.length > 0}
+          hasSelection={interaction.selectedNodeId !== null || interaction.selectedEdgeId !== null}
+          isCommandPaletteOpen={isCommandPaletteOpen}
+          zoomLevel={transform.k}
+        />
       </div>
     </section>
   )

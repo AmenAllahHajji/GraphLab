@@ -222,6 +222,19 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [filteredCommands, open, selectedIndex])
 
+  useEffect(() => {
+    const onOpen = () => {
+      setOpen(true)
+      setSelectedIndex(0)
+    }
+    window.addEventListener('graph:open-command-palette', onOpen)
+    return () => window.removeEventListener('graph:open-command-palette', onOpen)
+  }, [])
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('graph:command-palette-status', { detail: { open } }))
+  }, [open])
+
   if (!open) {
     return null
   }

@@ -1,0 +1,240 @@
+@keyframes toolbar-appear {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes shutter-flash {
+  0%   { opacity: 0; }
+  25%  { opacity: 0.12; }
+  100% { opacity: 0; }
+}
+
+@keyframes spin-once {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes zoom-label-update {
+  0%   { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+@keyframes search-expand {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.canvas-toolbar-container {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  height: 48px;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  background: var(--app-surface);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--app-border);
+  animation: toolbar-appear 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,149,255,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+[data-theme='light'] .canvas-toolbar-container {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,120,215,0.15), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--app-border);
+  margin: 0 6px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--app-muted);
+  cursor: pointer;
+  transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.toolbar-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: rgba(0, 149, 255, 0.12);
+  color: var(--app-accent);
+  box-shadow: 0 0 10px rgba(0,149,255,0.18);
+}
+
+.toolbar-btn:active:not(:disabled) {
+  background: rgba(0, 149, 255, 0.2);
+  transform: scale(0.92);
+}
+
+.toolbar-btn.active {
+  background: rgba(0, 149, 255, 0.18);
+  color: var(--app-accent);
+  outline: 1px solid rgba(0, 149, 255, 0.4);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.danger:hover:not(:disabled) {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+/* Tooltip styles */
+.toolbar-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--app-surface-strong);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 30;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.toolbar-btn:hover:not(:disabled)::after {
+  opacity: 1;
+  transition-delay: 300ms;
+}
+
+.zoom-indicator {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-muted);
+  min-width: 38px;
+  text-align: center;
+  cursor: pointer;
+  transition: color 160ms ease;
+  user-select: none;
+  position: relative;
+}
+
+.zoom-indicator:hover {
+  color: var(--app-accent);
+}
+
+.zoom-indicator.updating {
+  animation: zoom-label-update 150ms ease;
+}
+
+.zoom-indicator::after {
+  content: "Reset Zoom";
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--app-surface-strong);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 30;
+}
+
+.zoom-indicator:hover::after {
+  opacity: 1;
+  transition-delay: 300ms;
+}
+
+.toolbar-search-container {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  background: var(--app-surface-strong);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  animation: search-expand 180ms ease;
+  z-index: 25;
+}
+
+.toolbar-search-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--app-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.toolbar-search-input::placeholder {
+  color: var(--app-muted);
+}
+
+.toolbar-search-container:focus-within {
+  border-color: rgba(0, 149, 255, 0.65);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 3px rgba(0, 120, 215, 0.15);
+}
+
+.toolbar-search-container.error {
+  border-color: #ef4444;
+  animation: shake 0.5s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(-50%); }
+  25% { transform: translateX(-55%); }
+  75% { transform: translateX(-45%); }
+}
+
+.shutter-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: white;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0;
+}
+
+.shutter-overlay.active {
+  animation: shutter-flash 120ms ease-out;
+}
+
+.spin-animation {
+  animation: spin-once 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}

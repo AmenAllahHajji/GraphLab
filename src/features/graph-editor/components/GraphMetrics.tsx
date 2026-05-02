@@ -33,6 +33,25 @@ function translateGraphTypeLabel(label: string, t: (key: string) => string): str
   }
 }
 
+function MetricItem({ label, value, colorClass }: { label: string; value: string | number; colorClass: string }) {
+  const [pulse, setPulse] = React.useState(false)
+
+  React.useEffect(() => {
+    setPulse(true)
+    const timer = setTimeout(() => setPulse(false), 400)
+    return () => clearTimeout(timer)
+  }, [value])
+
+  return (
+    <>
+      <span className="text-slate-400">{label}</span>
+      <span className={`text-right font-mono font-bold ${colorClass} ${pulse ? 'value-changed' : ''}`}>
+        {value}
+      </span>
+    </>
+  )
+}
+
 function detectGraphTypes(
   nodes: NodeId[],
   edges: GraphEdge[],
@@ -159,12 +178,9 @@ export const GraphMetrics: React.FC<GraphMetricsProps> = ({ nodes, edges, direct
         <h4 style={{color: 'var(--app-text)'}} className="font-bold uppercase tracking-widest text-[10px]">{t('metrics.title')}</h4>
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 items-center">
-        <span className="text-slate-400">{t('metrics.nodes')}</span>
-        <span className="text-right text-blue-600 dark:text-blue-400 font-mono font-semibold">{metrics.nodeCount}</span>
-        <span className="text-slate-400">{t('metrics.edges')}</span>
-        <span className="text-right text-purple-600 dark:text-purple-400 font-mono font-semibold">{metrics.edgeCount}</span>
-        <span className="text-slate-400">{t('metrics.density')}</span>
-        <span className="text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">{metrics.density}%</span>
+        <MetricItem label={t('metrics.nodes')} value={metrics.nodeCount} colorClass="text-blue-600 dark:text-blue-400" />
+        <MetricItem label={t('metrics.edges')} value={metrics.edgeCount} colorClass="text-purple-600 dark:text-purple-400" />
+        <MetricItem label={t('metrics.density')} value={`${metrics.density}%`} colorClass="text-emerald-600 dark:text-emerald-400" />
       </div>
 
       {/* ── Graph Type ── */}
