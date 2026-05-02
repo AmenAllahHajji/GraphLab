@@ -1293,75 +1293,171 @@ function buildEulerianPathProgram(graph: GraphState): CinemaStep[] {
   return steps
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WELSH-POWELL — Coloration de graphe
+//
+// FLUX GÉNÉRAL :
+//   1. Calculer le degré de chaque sommet (nombre de voisins).
+//   2. Trier les sommets par degré décroissant → liste ordonnée X1, X2,…, Xn.
+//   3. Attribuer une nouvelle couleur au premier sommet non encore coloré.
+//   4. Parcourir le reste de la liste : attribuer cette même couleur à chaque
+//      sommet non coloré et non adjacent à un sommet déjà de cette couleur.
+//   5. S'il reste des sommets non colorés, retourner à l'étape 3.
+//      Sinon, la coloration est terminée.
+//
+// RENDU VISUEL (CinemaStep) :
+//   • colorGroups  → tableau de { color, nodeIds } → anneaux colorés distincts
+//                    par groupe dans GraphCanvas (C1=bleu, C2=orange, C3=vert…).
+//   • frontier     → sommet en cours d'examen → anneau ambre.
+//   • currentNode  → sommet actif → anneau blanc tournant.
+//   • visited / frontier / treeEdges → toujours [] (obligatoires pour le
+//     contrat CinemaStep car GraphCanvas y accède sans optional chaining).
+// ─────────────────────────────────────────────────────────────────────────────
 function buildWelshPowellProgram(graph: GraphState): CinemaStep[] {
   const steps: CinemaStep[] = []
-  
-  // Sorting nodes by degree descending
-  const degrees = graph.nodes.map(nodeId => ({
-    nodeId,
-    degree: graph.edges.reduce((acc, edge) => acc + (edge.from === nodeId || edge.to === nodeId ? 1 : 0), 0)
-  })).sort((a, b) => b.degree - a.degree)
 
-  const colors = ['#3b82f6', '#f97316', '#22c55e', '#a855f7', '#eab308', '#06b6d4', '#ec4899', '#84cc16']
-  const nodeColors = new Map<NodeId, string>()
-  const groups: Array<{ color: string; nodeIds: NodeId[] }> = []
-
-  steps.push({
-    narration: "Démarrage de l'algorithme de Welsh-Powell pour la coloration du graphe. Tri des sommets par degré décroissant.",
-    visited: [],
-    frontier: degrees.map(d => d.nodeId),
-    treeEdges: [],
-    colorGroups: []
-  })
-
-  let currentColorIndex = 0
-  const uncoloredNodes = new Set(graph.nodes)
-
-  while (uncoloredNodes.size > 0) {
-    const color = colors[currentColorIndex % colors.length]
-    const currentGroup: NodeId[] = []
-    
-    steps.push({
-      narration: `Traitement de la couleur ${currentColorIndex + 1} (${color}).`,
-      visited: Array.from(nodeColors.keys()),
-      frontier: Array.from(uncoloredNodes),
-      treeEdges: [],
-      colorGroups: [...groups, { color, nodeIds: currentGroup }]
-    })
-
-    for (const { nodeId } of degrees) {
-      if (uncoloredNodes.has(nodeId)) {
-        // Check if any neighbor has the same color in currentGroup
-        const neighbors = neighborsFor(graph, nodeId, true)
-        const hasConflict = neighbors.some(n => currentGroup.includes(n.nodeId))
-        
-        if (!hasConflict) {
-          uncoloredNodes.delete(nodeId)
-          nodeColors.set(nodeId, color)
-          currentGroup.push(nodeId)
-          
-          steps.push({
-            narration: `Coloration du sommet ${nodeId} en ${color}. Aucun conflit avec le groupe actuel.`,
-            visited: Array.from(nodeColors.keys()),
-            frontier: Array.from(uncoloredNodes),
-            treeEdges: [],
-            currentNode: nodeId,
-            colorGroups: [...groups, { color, nodeIds: [...currentGroup] }]
-          })
-        }
-      }
-    }
-    
-    groups.push({ color, nodeIds: currentGroup })
-    currentColorIndex++
+  // ── 1. CALCUL DES DEGRÉS ──────────────────────────────────────────────────
+  // Le degré d'un sommet pour la coloration = nombre de voisins distincts.
+  // On ignore la direction (une arête A->B ou B->A crée un conflit entre A et B).
+  // On ignore les arêtes multiples (elles ne créent qu'un seul conflit).
+  // On ignore les boucles (self-loops) car elles ne lient pas le sommet à d'autres.
+  const degrees: Record<NodeId, number> = {}
+  for (const node of graph.nodes) {
+    const uniqueNeighbors = new Set(
+      neighborsFor(graph, node, true)
+        .map(n => n.nodeId)
+        .filter(neighborId => neighborId !== node)
+    )
+    degrees[node] = uniqueNeighbors.size
   }
 
+  // ── 2. TRI DÉCROISSANT ────────────────────────────────────────────────────
+  // On trie du degré le plus élevé au plus bas.
+  // En cas d'égalité, on trie par ID pour garantir un ordre stable et déterministe.
+  const sortedNodes = [...graph.nodes].sort((a, b) => {
+    if (degrees[b] !== degrees[a]) return degrees[b] - degrees[a]
+    return a - b
+  })
+
+  // nodeColors[sommet] = index de couleur (0 = C1, 1 = C2, …)
+  const nodeColors: Record<NodeId, number> = {}
+  let colorIndex = 0
+
+  // buildColorGroups : construit le tableau colorGroups à partir de l'état
+  // courant de nodeColors. C'est ce tableau que GraphCanvas lit pour afficher
+  // des anneaux de couleurs distinctes autour de chaque groupe de sommets.
+  const buildColorGroups = (): Array<{ color: string; nodeIds: NodeId[] }> => {
+    const groups: Record<number, NodeId[]> = {}
+    for (const [nodeStr, idx] of Object.entries(nodeColors)) {
+      if (!groups[idx]) groups[idx] = []
+      groups[idx].push(Number(nodeStr))
+    }
+    return Object.entries(groups).map(([idxStr, nodeIds]) => ({
+      color: COMPONENT_COLORS[Number(idxStr) % COMPONENT_COLORS.length],
+      nodeIds,
+    }))
+  }
+
+  // ── ÉTAPE 1 : snapshot initial (aucun sommet coloré) ──────────────────────
   steps.push({
-    narration: `Coloration de Welsh-Powell terminée. ${groups.length} couleurs utilisées.`,
-    visited: graph.nodes,
+    narration: `Étape 1 — Tri par degré décroissant : ${sortedNodes.map(n => `${n}(d=${degrees[n]})`).join(', ')}`,
+    visited: [],
     frontier: [],
     treeEdges: [],
-    colorGroups: groups
+    colorGroups: [],
+  })
+
+  // Ensemble des sommets pas encore colorés (préservé dans l'ordre trié via sortedNodes)
+  const uncolored = new Set(sortedNodes)
+
+  // ── ÉTAPES 2 & 3 : COLORATION EN BOUCLE ──────────────────────────────────
+  while (uncolored.size > 0) {
+
+    // 2a. Premier sommet non coloré dans la liste triée → nouvelle couleur
+    const firstNode = sortedNodes.find(n => uncolored.has(n))!
+
+    steps.push({
+      narration: `Étape 2 — Nouvelle couleur C${colorIndex + 1}. Premier sommet non coloré dans la liste : ${firstNode} (d=${degrees[firstNode]}).`,
+      visited: [],
+      frontier: [firstNode], // Anneau ambre = sommet examiné
+      treeEdges: [],
+      currentNode: firstNode,
+      colorGroups: buildColorGroups(),
+    })
+
+    // On colorie ce premier sommet et on le retire des non-colorés
+    nodeColors[firstNode] = colorIndex
+    uncolored.delete(firstNode)
+
+    // currentGroup mémorise tous les sommets qui reçoivent la couleur courante,
+    // pour pouvoir tester l'adjacence des candidats suivants.
+    const currentGroup = [firstNode]
+
+    steps.push({
+      narration: `Sommet ${firstNode} → couleur C${colorIndex + 1}.`,
+      visited: [],
+      frontier: [],
+      treeEdges: [],
+      currentNode: firstNode,
+      colorGroups: buildColorGroups(),
+    })
+
+    // 2b. Parcourir le reste de la liste pour étendre ce groupe de couleur
+    for (const node of sortedNodes) {
+      if (!uncolored.has(node)) continue // Déjà coloré → on passe
+
+      // Test d'adjacence : ce sommet est-il voisin d'un membre de currentGroup ?
+      const neighbors = neighborsFor(graph, node, true).map(n => n.nodeId)
+      const isAdjacent = currentGroup.some(colored => neighbors.includes(colored))
+
+      if (isAdjacent) {
+        // Adjacent → conflit de couleur, on ne peut pas lui attribuer C(colorIndex+1)
+        steps.push({
+          narration: `Sommet ${node} (d=${degrees[node]}) est adjacent à un sommet de couleur C${colorIndex + 1} → couleur impossible.`,
+          visited: [],
+          frontier: [node], // Anneau ambre = sommet examiné mais rejeté
+          treeEdges: [],
+          currentNode: node,
+          colorGroups: buildColorGroups(),
+        })
+      } else {
+        // Non adjacent → on lui attribue la même couleur
+        nodeColors[node] = colorIndex
+        uncolored.delete(node)
+        currentGroup.push(node)
+
+        steps.push({
+          narration: `Sommet ${node} (d=${degrees[node]}) n'est pas adjacent à C${colorIndex + 1} → couleur C${colorIndex + 1} attribuée.`,
+          visited: [],
+          frontier: [],
+          treeEdges: [],
+          currentNode: node,
+          colorGroups: buildColorGroups(),
+        })
+      }
+    }
+
+    colorIndex++ // On passe à la couleur suivante
+
+    // 3. S'il reste des sommets, on retourne à l'étape 2
+    if (uncolored.size > 0) {
+      steps.push({
+        narration: `Étape 3 — Il reste ${uncolored.size} sommet(s) non coloré(s). On retourne à l'étape 2 avec une nouvelle couleur.`,
+        visited: [],
+        frontier: [],
+        treeEdges: [],
+        colorGroups: buildColorGroups(),
+      })
+    }
+  }
+
+  // ── FIN : tous les sommets ont une couleur ────────────────────────────────
+  steps.push({
+    narration: `Coloration de Welsh-Powell terminée — ${colorIndex} couleur(s) utilisée(s) pour ${graph.nodes.length} sommet(s).`,
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+    colorGroups: buildColorGroups(),
   })
 
   return steps
