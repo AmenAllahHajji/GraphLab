@@ -48,7 +48,7 @@ export function GraphHistoryTimeline() {
         </button>
 
         <input
-          className="flex-1 accent-indigo-400"
+          className="flex-1 accent-blue-400"
           type="range"
           min={0}
           max={total - 1}
@@ -67,8 +67,8 @@ export function GraphHistoryTimeline() {
           <button
             key={index}
             type="button"
-            className={`h-2 w-2 rounded-full transition-all ${
-              index === currentIndex ? 'bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.85)]' : 'bg-slate-600 hover:bg-slate-500'
+            className={`history-dot ${
+              index === currentIndex ? 'history-dot-active' : 'history-dot-inactive'
             }`}
             onClick={() => dispatch({ type: 'JUMP_TO', payload: { index } })}
             title={`${t('history.jump')} ${index + 1}`}

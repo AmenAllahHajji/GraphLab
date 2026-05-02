@@ -42,10 +42,10 @@ export function GraphContractPanel() {
   function highlightJson(jsonText: string) {
     const escaped = escapeHtml(jsonText)
     return escaped.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g, function (match) {
-      let cls = 'text-indigo-500'
+      let cls = 'text-blue-500'
       if (/^"/.test(match)) {
         if (/:$/.test(match)) {
-          cls = 'text-violet-400'
+          cls = 'text-sky-400'
         } else {
           cls = 'text-emerald-500'
         }
@@ -67,12 +67,18 @@ export function GraphContractPanel() {
             </Text>
           </div>
           <Group gap="xs">
-            <Button size="xs" variant="light" onClick={() => void copyExport()}>
+            <button className="btn-premium" onClick={() => void copyExport()}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
               {copyState === 'done' ? t('toolbar.copied') : copyState === 'error' ? t('toolbar.copyFailed') : t('toolbar.copy')}
-            </Button>
-            <Button size="xs" variant="light" onClick={() => void exportPng()}>
+            </button>
+            <button className="btn-premium" onClick={() => void exportPng()}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
               {t('toolbar.png')}
-            </Button>
+            </button>
           </Group>
         </Group>
         <Group align="stretch" gap="xs">

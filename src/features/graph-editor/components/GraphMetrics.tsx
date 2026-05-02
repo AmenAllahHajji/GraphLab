@@ -149,7 +149,7 @@ export const GraphMetrics: React.FC<GraphMetricsProps> = ({ nodes, edges, direct
 
   return (
       <div
-       className="absolute bottom-4 right-4 backdrop-blur-md p-3.5 rounded-xl border shadow-[0_4px_20px_rgba(0,0,0,0.5)] text-xs text-slate-300 pointer-events-none transition-all duration-300 z-20"
+       className="absolute bottom-4 right-4 backdrop-blur-md p-3.5 rounded-xl border graph-metrics-panel text-xs text-slate-300 pointer-events-none transition-all duration-300 z-20"
        style={{ width: '170px', backgroundColor: 'var(--app-surface-strong)', borderColor: 'var(--app-border)', color: 'var(--app-text)' }}
      >
       <div className="flex items-center gap-2 mb-2.5 border-b border-slate-700/50 pb-2">
@@ -160,11 +160,11 @@ export const GraphMetrics: React.FC<GraphMetricsProps> = ({ nodes, edges, direct
       </div>
       <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 items-center">
         <span className="text-slate-400">{t('metrics.nodes')}</span>
-        <span className="text-right text-indigo-300 font-mono font-semibold">{metrics.nodeCount}</span>
+        <span className="text-right text-blue-600 dark:text-blue-400 font-mono font-semibold">{metrics.nodeCount}</span>
         <span className="text-slate-400">{t('metrics.edges')}</span>
-        <span className="text-right text-purple-300 font-mono font-semibold">{metrics.edgeCount}</span>
+        <span className="text-right text-purple-600 dark:text-purple-400 font-mono font-semibold">{metrics.edgeCount}</span>
         <span className="text-slate-400">{t('metrics.density')}</span>
-        <span className="text-right text-emerald-300 font-mono font-semibold">{metrics.density}%</span>
+        <span className="text-right text-emerald-600 dark:text-emerald-400 font-mono font-semibold">{metrics.density}%</span>
       </div>
 
       {/* ── Graph Type ── */}

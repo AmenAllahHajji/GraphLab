@@ -24,7 +24,16 @@ export function GraphWorkspace() {
                 {t('app.subtitle')}
               </Text>
             </div>
-            <Badge color="indigo" variant="light">
+            <Badge 
+              variant="outline"
+              size="sm"
+              style={{ 
+                color: 'var(--app-accent)', 
+                borderColor: 'var(--app-accent)',
+                backgroundColor: 'rgba(0, 120, 215, 0.05)',
+                fontWeight: 700
+              }}
+            >
               Mantine UI
             </Badge>
           </Group>

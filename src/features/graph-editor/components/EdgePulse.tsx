@@ -6,7 +6,7 @@ interface EdgePulseProps {
   color?: string;
 }
 
-export const EdgePulse: React.FC<EdgePulseProps> = ({ d, color = '#c084fc' }) => {
+export const EdgePulse: React.FC<EdgePulseProps> = ({ d, color = '#38bdf8' }) => {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {

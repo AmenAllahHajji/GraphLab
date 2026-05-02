@@ -28,6 +28,7 @@ import { calculateSnap } from '../hooks/useMagneticSnap'
 import { CanvasHelp } from '../../workspace/components/CanvasHelp'
 import { useShortcut } from '../../../shared/hooks/useShortcut'
 import { useI18n } from '../../../shared/context/I18nContext'
+import { useAppTheme } from '../../../shared/context/AppThemeContext'
 import {
   buildCinemaProgram,
   speedToInterval,
@@ -144,11 +145,12 @@ function buildEdgeGeometry(
   const middleX = (startX + endX) / 2
   const middleY = (startY + endY) / 2
   const curveOffset = offset * 1.5
-  const controlX =
-    (bundleControl?.x ?? middleX) + nx * (curveOffset + (bundleControl?.spread ?? 0))
-  const controlY =
-    (bundleControl?.y ?? middleY) + ny * (curveOffset + (bundleControl?.spread ?? 0))
+  
+  // Control point for the quadratic curve
+  const controlX = (bundleControl?.x ?? middleX) + nx * (curveOffset + (bundleControl?.spread ?? 0))
+  const controlY = (bundleControl?.y ?? middleY) + ny * (curveOffset + (bundleControl?.spread ?? 0))
 
+  // Midpoint of quadratic Bézier curve: B(0.5) = (startX + 2*controlX + endX) / 4
   const labelX = (startX + 2 * controlX + endX) / 4
   const labelY = (startY + 2 * controlY + endY) / 4
 
@@ -174,7 +176,8 @@ function EdgeItem({
   setWeightError,
   commitWeight,
   setEditingEdgeId,
-  dispatch
+  dispatch,
+  colorScheme
 }: any) {
   const pathRef = useRef<SVGPathElement>(null)
 
@@ -198,33 +201,52 @@ function EdgeItem({
       <path
         ref={pathRef}
         d={geometry.path}
-        className={`pointer-events-none transition-all duration-300 ${isSelected ? 'stroke-purple-400' : 'stroke-indigo-400/70'}`}
-        strokeWidth={isSelected ? 3 : 2}
+        className={`edge-path pointer-events-none transition-all duration-300 ${isSelected ? 'stroke-blue-400' : 'stroke-blue-500/50'}`}
+        strokeWidth={isSelected ? 3.5 : 2}
         fill="none"
         strokeLinecap="round"
         filter={isSelected ? "url(#glow-selected)" : ""}
         markerEnd={directed ? (isSelected ? 'url(#arrow-selected)' : 'url(#arrow)') : undefined}
       />
       
-      <EdgeFlowParticles pathRef={pathRef} speed={directed ? 1.2 : 0.8} isActive={true} />
+      <EdgeFlowParticles 
+        pathRef={pathRef} 
+        speed={directed ? 1.2 : 0.8} 
+        isActive={true} 
+        color={colorScheme === 'dark' ? '#00d4ff' : '#0e7490'} 
+      />
       {!directed && (
-        <EdgeFlowParticles pathRef={pathRef} speed={0.8} isActive={true} reverse={true} />
+        <EdgeFlowParticles 
+          pathRef={pathRef} 
+          speed={0.8} 
+          isActive={true} 
+          reverse={true} 
+          color={colorScheme === 'dark' ? '#00d4ff' : '#0e7490'} 
+        />
       )}
-      <EdgePulse d={geometry.path} color={isSelected ? "#c084fc" : "#00ffcc"} />
+      <EdgePulse 
+        d={geometry.path} 
+        color={isSelected 
+          ? (colorScheme === 'dark' ? '#38bdf8' : '#0369a1') 
+          : (colorScheme === 'dark' ? '#0ea5e9' : '#0284c7')} 
+      />
       
       {weighted && (
         <g className="cursor-pointer" onClick={(event) => {
           event.stopPropagation()
           startWeightEdit(edge.id, edge.weight)
         }}>
-          <circle
-            cx={geometry.labelX}
-            cy={geometry.labelY}
-            r={14}
-            fill="#1e1b4b"
-            stroke={isSelected ? "#c084fc" : "#6366f1"}
+          {/* Rectangular weight label (Task: Graph Weights Fixes) */}
+          <rect
+            x={geometry.labelX - 12}
+            y={geometry.labelY - 10}
+            width={24}
+            height={20}
+            rx={4}
+            fill="var(--app-surface-strong)"
+            stroke={isSelected ? "var(--app-accent)" : "var(--app-border)"}
             strokeWidth={1.5}
-            className="transition-colors duration-300"
+            className="transition-all duration-300"
           />
           {editingEdgeId === edge.id ? (
             <foreignObject
@@ -237,7 +259,7 @@ function EdgeItem({
               <input
                 autoFocus
                 value={weightDraft}
-                className="h-7 w-14 rounded bg-slate-900 border border-purple-500 px-1 text-center text-xs font-semibold outline-none focus:ring-1 focus:ring-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+                className="h-7 w-14 rounded bg-slate-900 border border-blue-500 px-1 text-center text-xs font-semibold outline-none focus:ring-1 focus:ring-blue-400 shadow-[0_0_10px_rgba(14,165,233,0.4)]"
                 style={{color : 'var(--app-text)'}}
                 onChange={(event) => {
                   setWeightDraft(event.currentTarget.value)
@@ -260,7 +282,8 @@ function EdgeItem({
               x={geometry.labelX}
               y={geometry.labelY + 4}
               textAnchor="middle"
-              className="pointer-events-none fill-white text-[12px] font-bold"
+              className="pointer-events-none font-mono text-[11px] font-bold"
+              style={{ fill: 'var(--app-text)' }}
             >
               {edge.weight}
             </text>
@@ -277,6 +300,7 @@ export function GraphCanvas() {
   const history = useGraphHistory()
   const { graph, interaction } = useGraphState()
   const { t } = useI18n()
+  const { colorScheme } = useAppTheme()
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(
     null,
   )
@@ -678,7 +702,7 @@ export function GraphCanvas() {
     })
 
     const simulation = forceSimulation(simNodes)
-      .force('charge', forceManyBody().strength(-280))
+      .force('charge', forceManyBody().strength(-450)) // Stronger repulsion for clearer graphs
       .force('center', forceCenter(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2))
       .force(
         'link',
@@ -686,8 +710,8 @@ export function GraphCanvas() {
           graph.edges.map((edge) => ({ source: edge.from, target: edge.to })),
         )
           .id((node) => (node as { id: number }).id)
-          .distance(120)
-          .strength(0.16),
+          .distance(150) // Increased distance
+          .strength(0.2),
       )
       .alpha(1)
       .alphaDecay(0.035)
@@ -933,7 +957,7 @@ export function GraphCanvas() {
       return []
     }
 
-    const palette = ['#818cf8', '#34d399', '#fbbf24', '#fb7185', '#22d3ee']
+    const palette = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#22d3ee']
     return findComponents(graph).map((component, index) => {
       const points = component
         .map((nodeId) => graph.positions[nodeId])
@@ -996,12 +1020,25 @@ export function GraphCanvas() {
 
         <div className="flex items-start gap-2 self-start">
           <div style={{ marginRight: 32, display: 'flex', gap: 12 }}>
-            <Button size="xs" variant="light" onClick={() => window.dispatchEvent(new CustomEvent('graph:auto-layout'))} disabled={autoLayoutRunning}>
+            <button 
+              className="btn-premium"
+              onClick={() => window.dispatchEvent(new CustomEvent('graph:auto-layout'))} 
+              disabled={autoLayoutRunning}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${autoLayoutRunning ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
               {autoLayoutRunning ? t('canvas.autoLayoutRunning') : t('params.autoLayout')}
-            </Button>
-            <Button size="xs" variant="light" color="red" onClick={() => dispatch({ type: 'RESET' })}>
+            </button>
+            <button 
+              className="btn-danger-premium"
+              onClick={() => dispatch({ type: 'RESET' })}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
               {t('toolbar.clear')}
-            </Button>
+            </button>
           </div>
 
           {interaction.edgeDraftFrom !== null && (
@@ -1028,7 +1065,7 @@ export function GraphCanvas() {
               <button
                 type="button"
                 className="rounded-full px-3 py-1 text-xs font-semibold transition-colors"
-                style={{ border: '1px solid var(--app-border)', backgroundColor: 'rgba(99,102,241,0.06)', color: 'var(--app-accent)' }}
+                style={{ border: '1px solid var(--app-border)', backgroundColor: 'rgba(0,120,215,0.08)', color: 'var(--app-accent)' }}
                 onClick={() => dispatch({ type: 'CLEAR_EDGE_DRAFT' })}
               >
                 {t('canvas.cancelDraft')}
@@ -1200,6 +1237,10 @@ export function GraphCanvas() {
                   type: 'ADD_NODE',
                   payload: { position: { x: collided.x, y: collided.y } },
                 })
+                dispatch({ type: 'SET_SELECTED_NODE', payload: { nodeId: null } })
+                dispatch({ type: 'SET_SELECTED_EDGE', payload: { edgeId: null } })
+                dispatch({ type: 'CLEAR_EDGE_DRAFT' })
+                
                 setEditingEdgeId(null)
                 setWeightError(null)
               }}
@@ -1241,7 +1282,7 @@ export function GraphCanvas() {
               const maxX = Math.max(...points.map((point) => point.x)) + 28
               const minY = Math.min(...points.map((point) => point.y)) - 28
               const maxY = Math.max(...points.map((point) => point.y)) + 28
-              const palette = ['#818cf8', '#34d399', '#fbbf24', '#fb7185', '#22d3ee']
+              const palette = ['#38bdf8', '#34d399', '#fbbf24', '#fb7185', '#22d3ee']
               const color = palette[index % palette.length]
 
               return (
@@ -1285,6 +1326,7 @@ export function GraphCanvas() {
                 commitWeight={commitWeight}
                 setEditingEdgeId={setEditingEdgeId}
                 dispatch={dispatch}
+                colorScheme={colorScheme}
               />
             )
           })}
@@ -1363,7 +1405,7 @@ export function GraphCanvas() {
                 key={`cycle-edge-${edgeId}`}
                 d={geometry.path}
                 fill="none"
-                stroke="#4ade80"
+                stroke="#60a5fa"
                 strokeWidth={5}
                 strokeLinecap="round"
                 className="cycle-flash"
@@ -1381,10 +1423,10 @@ export function GraphCanvas() {
                 key={`cinema-tree-edge-${edgeId}`}
                 d={geometry.path}
                 fill="none"
-                stroke="#22c55e"
+                stroke={colorScheme === 'dark' ? '#22c55e' : '#15803d'}
                 strokeWidth={4}
                 strokeLinecap="round"
-                opacity={0.7}
+                opacity={0.8}
               />
             )
           })}
@@ -1399,7 +1441,7 @@ export function GraphCanvas() {
                 key={`dfs-path-edge-${edgeId}-${cinemaStepIndex}`}
                 d={geometry.path}
                 fill="none"
-                stroke="#f59e0b"
+                stroke={colorScheme === 'dark' ? '#f59e0b' : '#b45309'}
                 strokeWidth={4}
                 strokeLinecap="round"
                 className="dfs-tendril"
@@ -1455,7 +1497,7 @@ export function GraphCanvas() {
                 key={`cinema-current-edge-${currentCinemaStep.currentEdgeId}-${cinemaStepIndex}`}
                 d={geometry.path}
                 fill="none"
-                stroke="#ffffff"
+                stroke={colorScheme === 'dark' ? '#00e5ff' : '#0097a7'}
                 strokeWidth={4}
                 strokeLinecap="round"
                 className="cinema-edge-flash"
@@ -1481,7 +1523,9 @@ export function GraphCanvas() {
                 key={`flow-${edge.id}-${cinemaStepIndex}`}
                 d={geometry.path}
                 fill="none"
-                stroke={isSaturated ? '#ef4444' : '#60a5fa'}
+                stroke={isSaturated 
+                  ? (colorScheme === 'dark' ? '#ef4444' : '#b91c1c') 
+                  : (colorScheme === 'dark' ? '#60a5fa' : '#1d4ed8')}
                 strokeWidth={Math.max(2, 8 * ratio)}
                 strokeLinecap="round"
                 opacity={0.75}
@@ -1500,7 +1544,7 @@ export function GraphCanvas() {
                 key={`augmenting-${edgeId}-${cinemaStepIndex}`}
                 d={geometry.path}
                 fill="none"
-                stroke="#f8fafc"
+                stroke={colorScheme === 'dark' ? '#a78bfa' : '#6d28d9'}
                 strokeWidth={3}
                 strokeLinecap="round"
                 strokeDasharray="10 6"
@@ -1515,7 +1559,7 @@ export function GraphCanvas() {
               y1={edgeDraftPosition.y}
               x2={cursorPosition.x}
               y2={cursorPosition.y}
-              className="stroke-indigo-400"
+              className="stroke-blue-400"
               strokeWidth={2}
               strokeDasharray="6 4"
               filter="url(#glow)"
@@ -1596,10 +1640,15 @@ export function GraphCanvas() {
               >
                 <circle
                   r={NODE_RADIUS}
-                  fill={isSelected || isDraftStart ? "#312e81" : "#1e1b4b"}
-                  stroke={isSelected || isDraftStart ? "#818cf8" : "#475569"}
-                  strokeWidth={isSelected || isDraftStart ? 3 : 2}
-                  className="cursor-pointer transition-all hover:fill-slate-800"
+                  fill={isSelected || isDraftStart ? "var(--app-accent)" : "var(--app-surface-strong)"}
+                  fillOpacity={isSelected || isDraftStart ? 0.25 : 1}
+                  stroke={isSelected || isDraftStart ? "var(--app-accent)" : "var(--app-accent)"}
+                  strokeOpacity={isSelected || isDraftStart ? 1 : 0.35}
+                  strokeWidth={isSelected || isDraftStart ? 3.5 : 2.2}
+                  className="cursor-pointer transition-all hover:stroke-opacity-100 hover:filter hover:drop-shadow-[0_0_8px_rgba(0,120,215,0.4)]"
+                  style={{ 
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)' 
+                  }}
                   onClick={(event) => {
                     event.stopPropagation()
 
@@ -1639,9 +1688,11 @@ export function GraphCanvas() {
                   <circle
                     r={haloRadius}
                     fill="none"
-                    stroke={`hsl(${haloHue} 90% 70%)`}
-                    strokeWidth={2}
-                    opacity={0.42}
+                    stroke={distance === 0 
+                      ? (colorScheme === 'dark' ? '#0055cc' : '#1d4ed8') 
+                      : (colorScheme === 'dark' ? '#00aaff' : '#0284c7')}
+                    strokeWidth={2.5}
+                    opacity={0.5}
                     className="dijkstra-halo"
                   />
                 )}
@@ -1668,9 +1719,9 @@ export function GraphCanvas() {
                     <circle
                       r={NODE_RADIUS + 5}
                       fill="none"
-                      stroke="#22c55e"
+                      stroke={colorScheme === 'dark' ? '#22c55e' : '#15803d'}
                       strokeWidth={2.5}
-                      opacity={0.75}
+                      opacity={0.8}
                     />
                   )
                 )}
@@ -1678,7 +1729,7 @@ export function GraphCanvas() {
                   <circle
                     r={NODE_RADIUS + 9}
                     fill="none"
-                    stroke="#f59e0b"
+                    stroke={colorScheme === 'dark' ? '#f59e0b' : '#b45309'}
                     strokeWidth={2}
                     className={cinemaProgram?.algorithm === 'BFS' ? 'bfs-wavefront' : 'frontier-pulse'}
                   />
@@ -1687,13 +1738,14 @@ export function GraphCanvas() {
                   <circle
                     r={NODE_RADIUS + 12}
                     fill="none"
-                    stroke="#f8fafc"
-                    strokeWidth={2}
+                    stroke={colorScheme === 'dark' ? '#00e5ff' : '#0097a7'}
+                    strokeWidth={3}
                     className="cinema-current-node"
                   />
                 )}
                 <text
-                  className="pointer-events-none fill-slate-200 text-[13px] font-bold"
+                  className="pointer-events-none text-[13px] font-bold"
+                  style={{ fill: 'var(--app-text)' }}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   dy="1"

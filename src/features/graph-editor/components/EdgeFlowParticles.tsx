@@ -13,7 +13,7 @@ export const EdgeFlowParticles: React.FC<EdgeFlowParticlesProps> = ({
   pathRef,
   particleCount = 3,
   speed = 1,
-  color = '#00ffcc',
+  color = '#00d4ff',
   isActive = true,
   reverse = false,
 }) => {
@@ -73,7 +73,7 @@ export const EdgeFlowParticles: React.FC<EdgeFlowParticlesProps> = ({
   return (
     <g ref={groupRef} style={{ pointerEvents: 'none' }}>
       {Array.from({ length: particleCount }).map((_, i) => (
-        <circle key={i} r={2.5} fill={color} opacity={0.6} filter="drop-shadow(0 0 3px #00ffcc)" />
+        <circle key={i} r={2.5} fill={color} opacity={0.6} filter={`drop-shadow(0 0 3px ${color})`} />
       ))}
     </g>
   );

@@ -3,7 +3,7 @@ import {
   createTheme,
   type MantineColorsTuple,
 } from '@mantine/core'
-import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 
 type ColorScheme = 'light' | 'dark'
 
@@ -15,23 +15,23 @@ interface AppThemeContextValue {
 
 const AppThemeContext = createContext<AppThemeContextValue | null>(null)
 
-const elementaryIndigo: MantineColorsTuple = [
+const elementaryBlue: MantineColorsTuple = [
   '#eef2ff',
   '#e0e7ff',
   '#c7d2fe',
   '#a5b4fc',
-  '#818cf8',
-  '#6366f1',
-  '#4f46e5',
-  '#4338ca',
-  '#3730a3',
-  '#312e81',
+  '#38bdf8',
+  '#0ea5e9',
+  '#0284c7',
+  '#0369a1',
+  '#075985',
+  '#0c4a6e',
 ]
 
 const theme = createTheme({
-  primaryColor: 'indigo',
+  primaryColor: 'blue',
   colors: {
-    indigo: elementaryIndigo,
+    blue: elementaryBlue,
   },
   fontFamily: 'Outfit, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif',
   defaultRadius: 'md',
@@ -43,9 +43,14 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
     return persisted === 'dark' ? 'dark' : 'light'
   })
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-mantine-color-scheme', colorScheme)
+  }, [])
+
   function setColorScheme(nextScheme: ColorScheme) {
     setColorSchemeState(nextScheme)
     window.localStorage.setItem('graph-lab-color-scheme', nextScheme)
+    document.documentElement.setAttribute('data-mantine-color-scheme', nextScheme)
   }
 
   function toggleColorScheme() {

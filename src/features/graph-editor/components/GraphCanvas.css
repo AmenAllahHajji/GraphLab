@@ -13,14 +13,33 @@
 }
 
 @keyframes pulse-ring {
-  0%, 100% { opacity: 0.35; transform: scale(0.96); }
-  50% { opacity: 0.95; transform: scale(1.05); }
+  0%, 100% { 
+    opacity: 0.35; 
+    transform: scale(0.96); 
+    stroke: #00e5ff;
+  }
+  50% { 
+    opacity: 0.95; 
+    transform: scale(1.05); 
+    stroke: #00e5ff;
+  }
+}
+
+[data-mantine-color-scheme='light'] @keyframes pulse-ring {
+  0%, 100% { stroke: #0097a7; }
+  50% { stroke: #0097a7; }
 }
 
 @keyframes edge-glint {
-  0% { opacity: 0.1; }
-  45% { opacity: 1; }
-  100% { opacity: 0.25; }
+  0% { opacity: 0.1; stroke: #00e5ff; }
+  45% { opacity: 1; stroke: #00e5ff; }
+  100% { opacity: 0.25; stroke: #00e5ff; }
+}
+
+[data-mantine-color-scheme='light'] @keyframes edge-glint {
+  0% { stroke: #0097a7; }
+  45% { stroke: #0097a7; }
+  100% { stroke: #0097a7; }
 }
 
 @keyframes grow-dash {
@@ -65,8 +84,17 @@
   100% { opacity: 0.2; }
 }
 
+@keyframes flash-blue {
+  0% { stroke: #00e5ff; opacity: 0.95; }
+  100% { stroke: transparent; opacity: 0; }
+}
+
+[data-mantine-color-scheme='light'] @keyframes flash-blue {
+  0% { stroke: #0097a7; }
+}
+
 .cycle-flash {
-  animation: flash-green 1s ease-out forwards;
+  animation: flash-blue 1s ease-out forwards;
 }
 
 .query-highlight-pulse {
@@ -113,6 +141,11 @@
 
 .dfs-tendril {
   animation: dfs-scan 620ms ease-in-out infinite;
+  stroke: #f59e0b;
+}
+
+[data-mantine-color-scheme='light'] .dfs-tendril {
+  stroke: #b45309;
 }
 
 .cluster-region {
