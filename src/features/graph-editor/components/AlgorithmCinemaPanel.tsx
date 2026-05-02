@@ -48,7 +48,7 @@ export function AlgorithmCinemaPanel({
   onFastForward,
   onScrub,
 }: AlgorithmCinemaPanelProps) {
-  const requiresTarget = algorithm === 'MaxFlow'
+  const requiresTarget = algorithm === 'MaxFlow' || algorithm === 'RechercheChaine'
   const disabled = stepCount === 0
 
   return (
@@ -74,6 +74,7 @@ export function AlgorithmCinemaPanel({
             <option value="BellmanFord">Bellman-Ford</option>
             <option value="WelshPowell">Welsh-Powell</option>
             <option value="EulerienPath">Chemins / circuits eulériens</option>
+            <option value="RechercheChaine">Recherche Chaîne</option>
           </select>
         </label>
 

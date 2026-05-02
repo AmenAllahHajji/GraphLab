@@ -1,6 +1,7 @@
 import type { GraphEdge, GraphState, NodeId } from '../../graph/model/types'
+import { buildEulerianTraceReport } from '../../graph/utils/graphAnalysis'
 
-export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest' | 'StronglyConnectedComponents' | 'Bellman' | 'BellmanFord' | 'WelshPowell' | 'EulerienPath'
+export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest' | 'StronglyConnectedComponents' | 'Bellman' | 'BellmanFord' | 'WelshPowell' | 'EulerienPath' | 'RechercheChaine'
 
 export interface CinemaStep {
   narration: string
@@ -992,6 +993,225 @@ function buildStronglyConnectedComponentsProgram(graph: GraphState): CinemaStep[
 
   return steps
 }
+
+function buildSearchChainProgram(graph: GraphState, source: NodeId, target: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+
+  // Étape 1: Présentation
+  steps.push({
+    narration: `Recherche chaîne de ${source} à ${target}`,
+    visited: [],
+    frontier: [],
+    treeEdges: []
+  })
+
+  // BFS pour trouver la chaîne
+  const visited = new Set<NodeId>([source])
+  const parent: Record<NodeId, NodeId | null> = {}
+  parent[source] = null
+  const queue: NodeId[] = [source]
+  let foundTarget = false
+
+  // Étape 2: Initialisation
+  steps.push({
+    narration: `Sommet source: ${source}`,
+    visited: [source],
+    frontier: [source],
+    treeEdges: []
+  })
+
+  // BFS
+  while (queue.length > 0) {
+    const node = queue.shift()!
+
+    if (node === target) {
+      foundTarget = true
+      break
+    }
+
+    // Trouver les voisins (non orienté)
+    const neighbors = graph.edges
+      .filter(e => (e.from === node || e.to === node))
+      .map(e => (e.from === node ? e.to : e.from))
+      .filter(n => !visited.has(n))
+
+    for (const neighbor of neighbors) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor)
+        parent[neighbor] = node
+        queue.push(neighbor)
+
+        // Étape : exploration du voisin
+        const edge = graph.edges.find(
+          e => (e.from === node && e.to === neighbor) || (e.from === neighbor && e.to === node)
+        )
+
+        steps.push({
+          narration: `Explorer ${node} → ${neighbor}`,
+          visited: Array.from(visited),
+          frontier: [neighbor, ...queue],
+          treeEdges: edge ? [edge.id] : [],
+          currentNode: neighbor,
+          currentEdgeId: edge?.id
+        })
+
+        if (neighbor === target) {
+          foundTarget = true
+          break
+        }
+      }
+    }
+  }
+
+  if (!foundTarget) {
+    // Pas de chaîne trouvée
+    steps.push({
+      narration: `❌ Aucune chaîne de ${source} à ${target}`,
+      visited: Array.from(visited),
+      frontier: [],
+      treeEdges: []
+    })
+    return steps
+  }
+
+  // Reconstruire la chaîne
+  const chain: NodeId[] = []
+  let curr: NodeId | null = target
+  while (curr !== null) {
+    chain.unshift(curr)
+    curr = parent[curr] || null
+  }
+
+  // Étape finale: chaîne trouvée
+  steps.push({
+    narration: `✅ Chaîne trouvée: ${chain.join(' → ')}`,
+    visited: chain,
+    frontier: [],
+    treeEdges: [],
+    pathEdges: graph.edges
+      .filter((e) => {
+        for (let j = 0; j < chain.length - 1; j++) {
+          if ((e.from === chain[j] && e.to === chain[j + 1]) ||
+              (e.from === chain[j + 1] && e.to === chain[j])) {
+            return true
+          }
+        }
+        return false
+      })
+      .map(e => e.id)
+  })
+
+  return steps
+}
+
+function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+  const report = buildEulerianTraceReport(graph.nodes, graph.edges)
+  const properties = report.properties
+  const degreeSummary = graph.nodes
+    .map((nodeId) => `${nodeId}=${graph.edges.reduce((degree, edge) => degree + (edge.from === nodeId || edge.to === nodeId ? 1 : 0), 0)}`)
+    .join(', ')
+  const chainStatus = report.chainMessage
+  const cycleStatus = report.cycleMessage
+  const verdict = report.verdictMessage
+
+  steps.push({
+    narration: `Analyse eulérienne du graphe: ${graph.nodes.length} sommet(s), ${graph.edges.length} arête(s).`,
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+  })
+
+  steps.push({
+    narration: `Connexité: ${properties.isConnexe ? 'oui' : 'non'}. ${properties.ruleMatched}`,
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+  })
+
+  steps.push({
+    narration: `Degrés: ${degreeSummary || 'aucun sommet'}. Sommets impairs: ${properties.oddNodes.length > 0 ? properties.oddNodes.join(', ') : 'aucun'}.`,
+    visited: graph.nodes,
+    frontier: properties.oddNodes,
+    treeEdges: graph.edges.map((edge) => edge.id),
+  })
+
+  steps.push({
+    narration: chainStatus,
+    visited: graph.nodes,
+    frontier: properties.oddNodes,
+    treeEdges: [],
+  })
+
+  steps.push({
+    narration: cycleStatus,
+    visited: graph.nodes,
+    frontier: [],
+    treeEdges: [],
+  })
+
+  steps.push({
+    narration: verdict,
+    visited: graph.nodes,
+    frontier: [],
+    treeEdges: [],
+  })
+
+  if (!properties.hasEulerianPathOrChain || !report.chainTrace) {
+    return steps
+  }
+
+  const startNode = properties.oddDegreeCount === 2 && properties.oddNodes.length > 0 ? properties.oddNodes[0] : source
+  const usedEdges = new Set<string>()
+
+  steps.push({
+    narration: `Départ du parcours eulérien depuis ${startNode}.`,
+    visited: [startNode],
+    frontier: [startNode],
+    treeEdges: [],
+    currentNode: startNode,
+  })
+
+  for (let index = 0; index < report.chainTrace.length - 1; index++) {
+    const from = report.chainTrace[index]
+    const to = report.chainTrace[index + 1]
+    const edge = graph.edges.find((candidate) => {
+      if (usedEdges.has(candidate.id)) {
+        return false
+      }
+      return (
+        (candidate.from === from && candidate.to === to) ||
+        (!graph.directed && candidate.from === to && candidate.to === from)
+      )
+    })
+
+    if (!edge) {
+      continue
+    }
+
+    usedEdges.add(edge.id)
+
+    steps.push({
+      narration: `Traverser ${from} → ${to}.`,
+      visited: report.chainTrace.slice(0, index + 2),
+      frontier: [to],
+      treeEdges: Array.from(usedEdges),
+      pathEdges: [edge.id],
+      currentNode: to,
+      currentEdgeId: edge.id,
+    })
+  }
+
+  steps.push({
+    narration: `${report.chainMessage} ${report.cycleMessage} ${report.verdictMessage}`,
+    visited: report.chainTrace,
+    frontier: [],
+    treeEdges: Array.from(usedEdges),
+    pathEdges: Array.from(usedEdges),
+  })
+
+  return steps
+}
  
 export function buildCinemaProgram(
   graph: GraphState,
@@ -1017,6 +1237,10 @@ export function buildCinemaProgram(
         return buildConnectedComponentsProgram(graph)
       case 'SpanningForest':
         return buildSpanningForestProgram(graph)
+      case 'EulerienPath':
+        return buildEulerienProgram(graph, source)
+      case 'RechercheChaine':
+        return buildSearchChainProgram(graph, source, typeof target === 'number' ? target : source)
       case 'StronglyConnectedComponents':
   return buildStronglyConnectedComponentsProgram(graph)
       default:
