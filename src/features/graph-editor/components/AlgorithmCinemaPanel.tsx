@@ -49,6 +49,7 @@ export function AlgorithmCinemaPanel({
   onFastForward,
   onScrub,
 }: AlgorithmCinemaPanelProps) {
+  const { t } = useI18n()
   const requiresTarget = algorithm === 'MaxFlow' || algorithm === 'RechercheChaine'
   const disabled = stepCount === 0
 
