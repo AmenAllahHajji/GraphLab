@@ -65,3 +65,29 @@
 - **Conflict Resolution**: Managed complex merge conflicts between the `ui-ux-enhancements` branch and `origin main`.
 - **State Stabilization**: Synchronized the local development environment with the remote repository while preserving 15+ custom UI commits.
 
+
+### Session Update: May 2, 2026 - Premium Cinema Overhaul & Floating Power Tools
+
+#### 1. Algorithm Cinema "Pro" Overhaul
+- **Shimmering Progress Visualization**: Engineered a top-mounted, reactive progress bar with a purple-to-indigo shimmering animation that tracks algorithm execution states.
+- **Semantic Status Badges**: Developed an intelligent badge system (`🔍 Explore`, `✅ Ajouté`, `🏁 Terminé`, `❌ Rejeté`) that provides real-time human-readable feedback on the algorithm's decision-making process.
+- **Glassmorphic Control Suite**: Redesigned the playback panel with a segmented control layout, improved typography (Outfit), and high-end iconography.
+
+#### 2. Intelligent PNG Snapshot Engine
+- **Theme-Aware Serialization**: Built a custom SVG-to-PNG engine that resolves CSS variables (`var(--app-*)`) in real-time, ensuring snapshots match the user's light/dark mode perfectly.
+- **Dynamic Framing**: Implemented an auto-centering and zoom-to-fit algorithm that calculates graph bounding boxes (with padding) to generate professional, high-resolution graph exports.
+- **Visual Fidelity**: Injected custom styles and SVG filters into the export blob to preserve the "Cyber-Lab" glow and high-contrast edges in the final image.
+
+#### 3. Floating Top Toolbar & Search
+- **Pill-Shaped Command Center**: Designed and anchored a premium, horizontal floating toolbar to the top of the canvas for instant access to power tools.
+- **Inline Node Search**: Integrated a downward-expanding search bar within the toolbar that allows users to instantly find and center nodes by ID with a `pulse-ring` visual confirmation.
+- **Utility Grouping**: Centralized Undo/Redo, Zoom indicators, Reset View, and Screenshot actions into a single high-performance glassmorphic component.
+
+#### 4. Reactive UX & Performance
+- **Metric Pulse Animations**: Implemented a "Value-Changed" pulse effect for the Metrics Dashboard. Nodes, Edges, and Density values now glow and scale subtly upon change to confirm user interactions.
+- **Shutter Flash Feedback**: Added a viewport-level "Shutter Flash" overlay to provide satisfying visual confirmation when taking canvas snapshots.
+- **State Cleanup Logic**: Engineered a "Toolbar Desync" fix that automatically closes search bars and clears selection highlights after a node or edge is created, keeping the workspace clutter-free.
+
+#### 5. Integration & Architecture
+- **Event-Driven Synchronization**: Implemented a `CustomEvent` bridge between the `GraphCanvas` and `CommandPalette` to keep the floating toolbar's active states synchronized with global UI overlays.
+- **Code Hardening**: Resolved identifier collision bugs and Vite transform failures while maintaining 100% clean HMR.

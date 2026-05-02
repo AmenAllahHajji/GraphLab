@@ -41,10 +41,11 @@ export function CanvasHelp() {
       <>
         <Tooltip label={t('help.hint')}>
           <ActionIcon
-            variant="filled"
-            color="indigo"
+            variant="light"
+            color="blue"
             radius="xl"
             size="lg"
+            className="transition-all hover:scale-110 hover:bg-blue-500/20"
             onClick={() => setOpened(true)}
             aria-label={t('canvas.title')}
           >
@@ -62,7 +63,14 @@ export function CanvasHelp() {
     <HoverCard openDelay={120} closeDelay={120} width={320} shadow="md" withArrow>
       <HoverCard.Target>
         <Tooltip label={t('help.hint')}>
-          <ActionIcon variant="filled" color="indigo" radius="xl" size="lg" aria-label={t('canvas.title')}>
+          <ActionIcon 
+            variant="light" 
+            color="blue" 
+            radius="xl" 
+            size="lg" 
+            className="transition-all hover:scale-110 hover:bg-blue-500/20"
+            aria-label={t('canvas.title')}
+          >
             ?
           </ActionIcon>
         </Tooltip>

@@ -222,6 +222,19 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [filteredCommands, open, selectedIndex])
 
+  useEffect(() => {
+    const onOpen = () => {
+      setOpen(true)
+      setSelectedIndex(0)
+    }
+    window.addEventListener('graph:open-command-palette', onOpen)
+    return () => window.removeEventListener('graph:open-command-palette', onOpen)
+  }, [])
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('graph:command-palette-status', { detail: { open } }))
+  }, [open])
+
   if (!open) {
     return null
   }
@@ -229,7 +242,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh] backdrop-blur-sm" style={{ backgroundColor: 'rgba(15, 23, 42, 0.35)' }}>
       <div
-        className="w-full max-w-2xl rounded-xl border shadow-[0_0_40px_rgba(99,102,241,0.25)]"
+        className="w-full max-w-2xl rounded-xl border command-palette-panel"
         style={{ backgroundColor: 'var(--app-surface-strong)', borderColor: 'var(--app-border)' }}
       >
         <div className="border-b p-3" style={{ borderColor: 'var(--app-border)' }}>

@@ -93,33 +93,122 @@ export function formatGraphForExport(graph: GraphState, format: ExportFormat): s
 
 export async function svgToPngBlob(svgElement: SVGSVGElement): Promise<Blob | null> {
   const serializer = new XMLSerializer()
-  const svgString = serializer.serializeToString(svgElement)
+  
+  // Clone SVG to modify it for export without affecting the live UI
+  const clonedSvg = svgElement.cloneNode(true) as SVGSVGElement
+  
+  // 1. Pixel-Perfect Styling: Inject exact CSS and SVG Filters
+  const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+  const isDarkMode = document.documentElement.getAttribute('data-mantine-color-scheme') === 'dark'
+  
+  // Theme Variables for export - Mirroring index.css exactly
+  const theme = isDarkMode ? {
+    text: '#e2e8f0',
+    accent: '#0095ff',
+    surface: '#0f172a',
+    border: 'rgba(148, 163, 184, 0.45)', // More visible border for snapshot
+    edge: 'rgba(148, 163, 184, 0.25)',
+    bg: '#010812'
+  } : {
+    text: '#0f172a',
+    accent: '#0078d7',
+    surface: '#ffffff',
+    border: 'rgba(15, 23, 42, 0.35)', // Darker border in light mode
+    edge: 'rgba(15, 23, 42, 0.15)',
+    bg: '#f0f8ff'
+  }
+
+  style.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap');
+    svg { font-family: 'Outfit', sans-serif; }
+    .node-wrapper circle { 
+      fill: ${theme.surface}; 
+      stroke: ${theme.border}; 
+      stroke-width: 2px; 
+    }
+    .node-wrapper text { 
+      fill: ${theme.text}; 
+      font-weight: 700; 
+      font-size: 14px;
+    }
+    .edge-path { 
+      stroke: ${theme.edge}; 
+      stroke-width: 2px; 
+      fill: none; 
+    }
+    .edge-path[class*="stroke-blue-400"] { 
+      stroke: ${theme.accent}; 
+      stroke-width: 3.5px; 
+    }
+    .weight-label rect { 
+      fill: ${theme.surface}; 
+      stroke: ${theme.border}; 
+      stroke-width: 1.5px;
+    }
+    .weight-label text { 
+      fill: ${theme.text}; 
+      font-weight: 700; 
+      font-size: 12px;
+    }
+    /* Semantic Colors from Algorithms */
+    [stroke="#22c55e"], [stroke="#15803d"] { stroke: ${isDarkMode ? '#22c55e' : '#15803d'}; stroke-width: 4px; }
+    [stroke="#f59e0b"], [stroke="#b45309"] { stroke: ${isDarkMode ? '#f59e0b' : '#b45309'}; stroke-width: 4px; }
+    [stroke="#00e5ff"], [stroke="#0097a7"] { stroke: ${isDarkMode ? '#00e5ff' : '#0097a7'}; stroke-width: 4px; }
+  `
+  clonedSvg.prepend(style)
+
+  // 2. Center and Zoom to Graph Bounds
+  const zoomGroup = clonedSvg.querySelector('g[transform*="scale"]')
+  if (zoomGroup) {
+    zoomGroup.removeAttribute('transform')
+  }
+
+  const nodes = Array.from(clonedSvg.querySelectorAll('.node-wrapper'))
+  if (nodes.length === 0) return null
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  nodes.forEach(node => {
+    const transform = node.getAttribute('transform')
+    if (transform) {
+      const match = /translate\(([^ ]+)[, ]+([^)]+)\)/.exec(transform)
+      if (match) {
+        const x = parseFloat(match[1]), y = parseFloat(match[2])
+        minX = Math.min(minX, x - 45); minY = Math.min(minY, y - 45)
+        maxX = Math.max(maxX, x + 45); maxY = Math.max(maxY, y + 45)
+      }
+    }
+  })
+
+  const padding = 20
+  minX -= padding; minY -= padding; maxX += padding; maxY += padding
+  const width = maxX - minX, height = maxY - minY
+
+  clonedSvg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`)
+  clonedSvg.setAttribute('width', width.toString())
+  clonedSvg.setAttribute('height', height.toString())
+
+  const svgString = serializer.serializeToString(clonedSvg)
   const encoded = encodeURIComponent(svgString)
   const image = new Image()
 
   return new Promise<Blob | null>((resolve) => {
     image.onload = () => {
       const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, svgElement.viewBox.baseVal.width || 900)
-      canvas.height = Math.max(1, svgElement.viewBox.baseVal.height || 520)
+      const targetWidth = 1440 // Higher standard resolution
+      canvas.width = targetWidth
+      canvas.height = (height / width) * targetWidth
+      
       const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve(null)
-        return
-      }
+      if (!ctx) return resolve(null)
 
-      const themeBackground = getComputedStyle(document.documentElement)
-        .getPropertyValue('--app-surface-strong')
-        .trim()
-      ctx.fillStyle = themeBackground || '#020617'
+      // Final Render with Exact Theme Background
+      ctx.fillStyle = theme.bg
       ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
       ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
-      canvas.toBlob((nextBlob) => resolve(nextBlob), 'image/png')
+      canvas.toBlob((blob) => resolve(blob), 'image/png')
     }
-
     image.onerror = () => resolve(null)
     image.src = `data:image/svg+xml;charset=utf-8,${encoded}`
   })
 }
-
-
