@@ -56,7 +56,7 @@ export function AlgorithmCinemaPanel({
   return (
     <div className="rounded-xl border p-3 shadow-inner" style={{ borderColor: 'var(--app-border)', backgroundColor: 'var(--app-surface)' }}>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs text-slate-300">
+        <label className="text-xs" style={{color : 'var(--app-text)'}}>
           {t('cinema.algorithm')}
             <select
             className="ml-2 rounded border px-2 py-1 text-xs"
@@ -80,7 +80,7 @@ export function AlgorithmCinemaPanel({
           </select>
         </label>
 
-        <label className="text-xs text-slate-300">
+        <label className="text-xs" style={{color : 'var(--app-text)'}}>
           {t('cinema.source')}
             <select
             className="ml-2 rounded border px-2 py-1 text-xs"
@@ -98,7 +98,7 @@ export function AlgorithmCinemaPanel({
         </label>
 
         {requiresTarget && (
-          <label className="text-xs text-slate-300">
+          <label className="text-xs" style={{color : 'var(--app-text)'}}>
             {t('cinema.target')}
             <select
               className="ml-2 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs"
@@ -119,7 +119,7 @@ export function AlgorithmCinemaPanel({
           {t('cinema.build')}
         </button>
 
-        <label className="text-xs text-slate-300">
+        <label className="text-xs" style={{color : 'var(--app-text)'}}>
           {t('cinema.speed')}
           <select
             className="ml-2 rounded border px-2 py-1 text-xs"
@@ -163,12 +163,12 @@ export function AlgorithmCinemaPanel({
           disabled={disabled}
         />
 
-        <span className="text-slate-400">
+        <span style={{color : 'var(--app-text)'}}>
           {t('cinema.step')} {disabled ? 0 : currentIndex + 1}/{stepCount}
         </span>
       </div>
 
-      <p className="mt-2 min-h-5 text-xs text-indigo-200/90">{narration || t('cinema.narration')}</p>
+      <p className="mt-2 min-h-5 text-xs" style={{color : 'var(--app-text)'}}>{narration || t('cinema.narration')}</p>
     </div>
   )
 }
