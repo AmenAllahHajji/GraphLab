@@ -208,25 +208,25 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
   if (!info) return null
 
   return (
-    <div className="mt-4 border-t border-slate-700/50 pt-3">
+    <div className="mt-4 border-t border-slate-200 dark:border-slate-700/50 pt-3">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-between w-full text-left group"
       >
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500/10 text-blue-400 group-hover:bg-blue-500/20 transition-colors">
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 group-hover:bg-blue-200 dark:group-hover:bg-blue-500/20 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
             </svg>
           </div>
-          <span className="text-xs font-bold text-slate-300 tracking-wider uppercase group-hover:text-blue-400 transition-colors">
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 tracking-wider uppercase group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
             Learn : {info.title}
           </span>
         </div>
         <svg 
           xmlns="http://www.w3.org/2000/svg" 
-          className={`h-4 w-4 text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} 
+          className={`h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} 
           viewBox="0 0 20 20" 
           fill="currentColor"
         >
@@ -237,17 +237,17 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
       <div 
         className={`overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[800px] opacity-100 mt-3' : 'max-h-0 opacity-0'}`}
       >
-        <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/50 space-y-4">
+        <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-200 dark:border-slate-700/50 space-y-4">
           
           {/* Tab Switcher */}
-          <div className="flex p-1 bg-slate-900/50 rounded-lg overflow-x-auto custom-scrollbar">
+          <div className="flex p-1 bg-slate-200 dark:bg-slate-900/50 rounded-lg overflow-x-auto custom-scrollbar">
             <button
               type="button"
               onClick={() => setViewMode('summary')}
               className={`flex-1 min-w-[100px] text-xs font-bold uppercase tracking-wider py-2 rounded-md transition-all ${
                 viewMode === 'summary' 
-                  ? 'bg-blue-500/20 text-blue-400 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
               Résumé
@@ -257,8 +257,8 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
               onClick={() => setViewMode('detailed')}
               className={`flex-1 min-w-[100px] text-xs font-bold uppercase tracking-wider py-2 rounded-md transition-all flex justify-center items-center gap-1.5 ${
                 viewMode === 'detailed' 
-                  ? 'bg-purple-500/20 text-purple-400 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-300'
+                  ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -269,7 +269,7 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
             <button
               type="button"
               onClick={() => setShowVideoModal(true)}
-              className="flex-1 min-w-[100px] text-xs font-bold uppercase tracking-wider py-2 rounded-md transition-all flex justify-center items-center gap-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10"
+              className="flex-1 min-w-[100px] text-xs font-bold uppercase tracking-wider py-2 rounded-md transition-all flex justify-center items-center gap-1.5 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/10"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
@@ -281,33 +281,33 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
           {viewMode === 'summary' && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
               <div>
-                <h4 className="text-xs font-black uppercase text-blue-400 tracking-widest mb-1.5">Comment ça marche ?</h4>
-                <p className="text-sm text-slate-300 leading-relaxed font-medium">
+                <h4 className="text-xs font-black uppercase text-blue-600 dark:text-blue-400 tracking-widest mb-1.5">Comment ça marche ?</h4>
+                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
                   {info.description}
                 </p>
               </div>
               
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
-                  <h4 className="text-[10px] font-black uppercase text-emerald-400 tracking-widest mb-1.5 flex items-center gap-1.5">
+                <div className="bg-white dark:bg-slate-900/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700/30 shadow-sm dark:shadow-none">
+                  <h4 className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-widest mb-1.5 flex items-center gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                     </svg>
                     Complexité
                   </h4>
-                  <p className="text-xs text-slate-300 font-mono font-semibold">
+                  <p className="text-xs text-slate-700 dark:text-slate-300 font-mono font-semibold">
                     {info.complexity}
                   </p>
                 </div>
 
-                <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700/30">
-                  <h4 className="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-1.5 flex items-center gap-1.5">
+                <div className="bg-white dark:bg-slate-900/50 rounded-lg p-3 border border-slate-200 dark:border-slate-700/30 shadow-sm dark:shadow-none">
+                  <h4 className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-widest mb-1.5 flex items-center gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                     </svg>
                     Cas d'usage
                   </h4>
-                  <p className="text-xs text-slate-300 font-medium leading-tight">
+                  <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
                     {info.useCase}
                   </p>
                 </div>
@@ -317,10 +317,10 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
           
           {viewMode === 'detailed' && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-              <h4 className="text-xs font-black uppercase text-purple-400 tracking-widest mb-3 flex items-center gap-1.5 sticky top-0 bg-slate-800/90 py-1.5 backdrop-blur-sm z-10">
+              <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest mb-3 flex items-center gap-1.5 sticky top-0 bg-slate-50/90 dark:bg-slate-800/90 py-1.5 backdrop-blur-sm z-10">
                 Explication Pas-à-Pas
               </h4>
-              <div className="relative border-l-2 border-slate-700/50 ml-3 pl-5 pb-3 space-y-6">
+              <div className="relative border-l-2 border-slate-300 dark:border-slate-700/50 ml-3 pl-5 pb-3 space-y-6">
                 {info.steps.map((step, idx) => {
                   const parts = step.split(' : ')
                   const title = parts.length > 1 ? parts[0] : `Étape ${idx + 1}`
@@ -329,9 +329,9 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
                   return (
                     <div key={idx} className="relative">
                       {/* Timeline Dot */}
-                      <div className="absolute -left-[27px] top-1.5 h-3 w-3 rounded-full bg-slate-900 border-2 border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"></div>
-                      <h5 className="text-sm font-bold text-slate-200 mb-1">{title}</h5>
-                      <p className="text-sm text-slate-400 leading-relaxed font-medium">{content}</p>
+                      <div className="absolute -left-[27px] top-1.5 h-3 w-3 rounded-full bg-white dark:bg-slate-900 border-2 border-purple-400 dark:border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)] dark:shadow-[0_0_10px_rgba(168,85,247,0.5)]"></div>
+                      <h5 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">{title}</h5>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">{content}</p>
                     </div>
                   )
                 })}
