@@ -1154,16 +1154,20 @@ export function GraphCanvas() {
         )}
       </div>
 
-      <div className="canvas-container w-full h-full">
-        <div className="canvas-bg-glow" />
-        <div className="canvas-bg-glow-2" />
+      <div className="flex-grow relative overflow-hidden" style={{ backgroundColor: 'var(--app-surface-strong)' }}>
         <svg
           ref={svgRef}
           data-graph-canvas="main"
-          className="canvas-svg cursor-crosshair min-h-[520px]"
+          className="w-full h-full cursor-crosshair min-h-[520px]"
           viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
           preserveAspectRatio="xMidYMid meet"
           onDoubleClick={() => applyZoomTransform({ x: 0, y: 0, k: 1 })}
+          style={{
+            background: colorScheme === 'dark'
+              ? 'radial-gradient(ellipse at 25% 35%, rgba(14, 165, 233, 0.07) 0%, transparent 55%), radial-gradient(ellipse at 75% 70%, rgba(56, 189, 248, 0.05) 0%, transparent 50%), #020917'
+              : 'radial-gradient(ellipse at 25% 35%, rgba(14, 165, 233, 0.06) 0%, transparent 55%), #f0f9ff',
+            border: colorScheme === 'dark' ? 'none' : '1px solid rgba(14, 165, 233, 0.15)'
+          }}
           onMouseMove={(event) => {
             if (interaction.edgeDraftFrom === null || svgRef.current === null) {
               return
@@ -1177,13 +1181,8 @@ export function GraphCanvas() {
           }}
         >
           <defs>
-            <pattern
-              id="dot-grid"
-              width="40"
-              height="40"
-              patternUnits="userSpaceOnUse"
-            >
-              <circle cx="2" cy="2" r="1" fill="#38bdf8" fillOpacity="0.12" />
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="1.2" fill="rgba(56, 189, 248, 0.15)" />
             </pattern>
             <marker
               id="arrow"
@@ -1193,7 +1192,12 @@ export function GraphCanvas() {
               refY="6"
               orient="auto"
             >
-              <path d="M0,2 L10,6 L0,10 L3,6 z" fill="var(--app-accent)" />
+              <path
+                d="M0,2 L10,6 L0,10 L3,6 z"
+                style={{
+                  fill: colorScheme === 'dark' ? '#38bdf8' : '#0ea5e9'
+                }}
+              />
             </marker>
             <marker
               id="arrow-selected"
@@ -1203,30 +1207,24 @@ export function GraphCanvas() {
               refY="6"
               orient="auto"
             >
-              <path d="M0,2 L10,6 L0,10 L3,6 z" fill="var(--app-accent)" />
+              <path
+                d="M0,2 L10,6 L0,10 L3,6 z"
+                style={{
+                  fill: colorScheme === 'dark' ? '#38bdf8' : '#0ea5e9'
+                }}
+              />
             </marker>
-            
+
           </defs>
 
-          <g style={{ animation: 'grid-pan 18s linear infinite' }}>
-            <rect
-              x="-40"
-              y="-40"
-              width="calc(100% + 80px)"
-              height="calc(100% + 80px)"
-              fill="url(#dot-grid)"
-              style={{ pointerEvents: 'none' }}
-            />
-          </g>
-
           <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
-            {/* Clickable Overlay for creating nodes (Static, so clicking works properly) */}
             <rect
               x={-50000}
               y={-50000}
               width={100000}
               height={100000}
-              fill="transparent"
+              fill="url(#grid)"
+              className="animate-grid-pan"
               onClick={(event) => {
                 if (event.button !== 0 || svgRef.current === null) {
                   return
@@ -1240,7 +1238,7 @@ export function GraphCanvas() {
                 // Manually apply the d3-zoom transform to get world coordinates
                 let rawX = (svgP.x - transform.x) / transform.k
                 let rawY = (svgP.y - transform.y) / transform.k
-                
+
                 // Prevent overlapping on click
                 const collided = applyCollisions(rawX, rawY, null, graph.nodes, graph.positions, 55)
 
@@ -1254,7 +1252,7 @@ export function GraphCanvas() {
                 dispatch({ type: 'SET_SELECTED_NODE', payload: { nodeId: null } })
                 dispatch({ type: 'SET_SELECTED_EDGE', payload: { edgeId: null } })
                 dispatch({ type: 'CLEAR_EDGE_DRAFT' })
-                
+
                 setEditingEdgeId(null)
                 setWeightError(null)
 
@@ -1262,7 +1260,7 @@ export function GraphCanvas() {
                 window.dispatchEvent(new CustomEvent('toolbar:close-search'))
               }}
             />
-            
+
             <SnapGuides x={guides.x} y={guides.y} bounds={{ w: 10000, h: 10000 }} />
 
             {ENABLE_CLUSTER_ZONES && clusteringRegions.map((region) => {
