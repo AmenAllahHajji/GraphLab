@@ -1257,6 +1257,8 @@ export function buildCinemaProgram(
         return buildStronglyConnectedComponentsProgram(graph)
       case 'WelshPowell':
         return buildWelshPowellProgram(graph)
+      case 'Bellman':
+        return buildBellmanProgram(graph, source)
       default:
         return []
     }
@@ -1273,4 +1275,106 @@ export function buildCinemaProgram(
  
 export function speedToInterval(speed: number): number {
   return Math.max(60, Math.round(900 / Math.max(0.25, speed)))
+}
+
+function buildBellmanProgram(graph: GraphState, source: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+
+  const distances = new Map<NodeId, number>()
+  const parent = new Map<NodeId, string>() // 🔥 IMPORTANT
+  const treeEdges: string[] = []
+
+  // Initialize
+  for (const node of graph.nodes) {
+    distances.set(node, Number.POSITIVE_INFINITY)
+  }
+  distances.set(source, 0)
+
+  const toDistanceRecord = (): Record<number, number> => {
+    const record: Record<number, number> = {}
+    for (const node of graph.nodes) {
+      const val = distances.get(node)!
+      if (val !== Number.POSITIVE_INFINITY) {
+        record[node] = val
+      }
+    }
+    return record
+  }
+
+  // 🔥 Rebuild treeEdges from parent
+  const rebuildTreeEdges = () => {
+    return Array.from(parent.values())
+  }
+
+  // Initial step
+  steps.push({
+    narration: `Initialize Bellman algorithm from source node ${source}.`,
+    visited: [],
+    frontier: [source],
+    treeEdges: [],
+    currentNode: source,
+    distances: toDistanceRecord(),
+  })
+
+  // Relax edges
+  for (let i = 0; i < graph.nodes.length - 1; i++) {
+
+    steps.push({
+      narration: `Iteration ${i + 1} over all edges.`,
+      visited: [],
+      frontier: [],
+      treeEdges: rebuildTreeEdges(),
+      distances: toDistanceRecord(),
+    })
+
+    for (const edge of graph.edges) {
+      const u = edge.from
+      const v = edge.to
+      const weight = graph.weighted ? edge.weight : 1
+
+      const du = distances.get(u)!
+      const dv = distances.get(v)!
+
+      // Inspect
+      steps.push({
+        narration: `Inspect edge ${u} → ${v} with weight ${weight}.`,
+        visited: [],
+        frontier: [],
+        treeEdges: rebuildTreeEdges(),
+        currentEdgeId: edge.id,
+        currentNode: u,
+        distances: toDistanceRecord(),
+      })
+
+      // Relaxation
+      if (du !== Infinity && du + weight < dv) {
+
+        distances.set(v, du + weight)
+
+        // 🔥 overwrite parent (IMPORTANT)
+        parent.set(v, edge.id)
+
+        steps.push({
+          narration: `Update node ${v}: ${dv === Infinity ? '∞' : dv} → ${du + weight} (better path found).`,
+          visited: [],
+          frontier: [],
+          treeEdges: rebuildTreeEdges(),
+          currentNode: v,
+          currentEdgeId: edge.id,
+          distances: toDistanceRecord(),
+        })
+      }
+    }
+  }
+
+  // Final
+  steps.push({
+    narration: `Bellman complete. Each node keeps only the best incoming edge.`,
+    visited: [],
+    frontier: [],
+    treeEdges: rebuildTreeEdges(),
+    distances: toDistanceRecord(),
+  })
+
+  return steps
 }
