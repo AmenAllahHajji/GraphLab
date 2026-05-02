@@ -1014,6 +1014,7 @@ function buildSearchChainProgram(graph: GraphState, source: NodeId, target: Node
   const parent: Record<NodeId, NodeId | null> = {}
   parent[source] = null
   const queue: NodeId[] = [source]
+  const treeEdgesAccumulated: string[] = []
   let foundTarget = false
 
   // Étape 2: Initialisation
@@ -1056,11 +1057,15 @@ function buildSearchChainProgram(graph: GraphState, source: NodeId, target: Node
           return (e.from === node && e.to === neighbor) || (e.from === neighbor && e.to === node)
         })
 
+        if (edge) {
+          treeEdgesAccumulated.push(edge.id)
+        }
+
         steps.push({
           narration: `Explorer ${node} → ${neighbor}`,
           visited: Array.from(visited),
           frontier: [neighbor, ...queue],
-          treeEdges: edge ? [edge.id] : [],
+          treeEdges: [...treeEdgesAccumulated],
           currentNode: neighbor,
           currentEdgeId: edge?.id
         })
@@ -1097,8 +1102,7 @@ function buildSearchChainProgram(graph: GraphState, source: NodeId, target: Node
     narration: `✅ ${pathLabel} trouvé(e): ${chain.join(' → ')}`,
     visited: chain,
     frontier: [],
-    treeEdges: [],
-    pathEdges: graph.edges
+    treeEdges: graph.edges
       .filter((e) => {
         for (let j = 0; j < chain.length - 1; j++) {
           if (graph.directed) {
@@ -1208,7 +1212,6 @@ function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
       visited: report.chainTrace.slice(0, index + 2),
       frontier: [to],
       treeEdges: Array.from(usedEdges),
-      pathEdges: [edge.id],
       currentNode: to,
       currentEdgeId: edge.id,
     })
@@ -1219,7 +1222,6 @@ function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     visited: report.chainTrace,
     frontier: [],
     treeEdges: Array.from(usedEdges),
-    pathEdges: Array.from(usedEdges),
   })
 
   return steps

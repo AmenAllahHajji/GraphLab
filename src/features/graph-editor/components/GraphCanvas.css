@@ -7,35 +7,46 @@
   animation: pan-grid 2s linear infinite;
 }
 
-/* ── Base surface breath — very subtle color shift ── */
+/* ── Base surface breath — imperceptibly slow color pulse ── */
 @keyframes surface-breath {
   0%   { background-color: #010d1f; }
-  25%  { background-color: #020e22; }
-  50%  { background-color: #031525; }
-  75%  { background-color: #020e22; }
+  20%  { background-color: #011221; }
+  40%  { background-color: #021626; }
+  50%  { background-color: #031828; }
+  60%  { background-color: #021626; }
+  80%  { background-color: #011221; }
   100% { background-color: #010d1f; }
 }
 
-/* ── Primary orb: slow lissajous figure-8 path ── */
+/* ── Primary orb: ultra-smooth lissajous drift ── */
 @keyframes orb-primary {
   0%   { transform: translate(-50%, -50%) translate(0%,    0%)    scale(1.00); opacity: 0.14; }
-  12%  { transform: translate(-50%, -50%) translate(8%,   -6%)    scale(1.04); opacity: 0.17; }
-  25%  { transform: translate(-50%, -50%) translate(12%,   2%)    scale(1.08); opacity: 0.20; }
-  37%  { transform: translate(-50%, -50%) translate(6%,   10%)    scale(1.05); opacity: 0.17; }
-  50%  { transform: translate(-50%, -50%) translate(-2%,   8%)    scale(1.02); opacity: 0.14; }
-  62%  { transform: translate(-50%, -50%) translate(-10%,  2%)    scale(1.05); opacity: 0.17; }
-  75%  { transform: translate(-50%, -50%) translate(-12%, -5%)    scale(1.08); opacity: 0.20; }
-  87%  { transform: translate(-50%, -50%) translate(-5%,  -8%)    scale(1.04); opacity: 0.17; }
+  8%   { transform: translate(-50%, -50%) translate(5%,   -4%)    scale(1.02); opacity: 0.15; }
+  16%  { transform: translate(-50%, -50%) translate(10%,  -5%)    scale(1.05); opacity: 0.17; }
+  25%  { transform: translate(-50%, -50%) translate(12%,   2%)    scale(1.08); opacity: 0.19; }
+  33%  { transform: translate(-50%, -50%) translate(9%,    7%)    scale(1.06); opacity: 0.18; }
+  42%  { transform: translate(-50%, -50%) translate(2%,   10%)    scale(1.03); opacity: 0.15; }
+  50%  { transform: translate(-50%, -50%) translate(-3%,   7%)    scale(1.01); opacity: 0.14; }
+  58%  { transform: translate(-50%, -50%) translate(-8%,   3%)    scale(1.03); opacity: 0.15; }
+  66%  { transform: translate(-50%, -50%) translate(-11%,  0%)    scale(1.06); opacity: 0.17; }
+  75%  { transform: translate(-50%, -50%) translate(-12%, -5%)    scale(1.08); opacity: 0.19; }
+  83%  { transform: translate(-50%, -50%) translate(-8%,  -7%)    scale(1.05); opacity: 0.17; }
+  91%  { transform: translate(-50%, -50%) translate(-3%,  -5%)    scale(1.02); opacity: 0.15; }
   100% { transform: translate(-50%, -50%) translate(0%,    0%)    scale(1.00); opacity: 0.14; }
 }
 
-/* ── Secondary orb: offset phase for depth ── */
+/* ── Secondary orb: ultra-smooth counter-drift ── */
 @keyframes orb-secondary {
   0%   { transform: translate(-50%, -50%) translate(5%,    8%)    scale(1.05); opacity: 0.08; }
-  20%  { transform: translate(-50%, -50%) translate(-8%,   3%)    scale(1.10); opacity: 0.12; }
-  40%  { transform: translate(-50%, -50%) translate(-10%, -7%)    scale(1.07); opacity: 0.09; }
-  60%  { transform: translate(-50%, -50%) translate(2%,  -10%)    scale(1.04); opacity: 0.12; }
-  80%  { transform: translate(-50%, -50%) translate(10%,  -2%)    scale(1.08); opacity: 0.09; }
+  10%  { transform: translate(-50%, -50%) translate(0%,    5%)    scale(1.06); opacity: 0.09; }
+  20%  { transform: translate(-50%, -50%) translate(-6%,   3%)    scale(1.09); opacity: 0.11; }
+  30%  { transform: translate(-50%, -50%) translate(-9%,  -2%)    scale(1.10); opacity: 0.12; }
+  40%  { transform: translate(-50%, -50%) translate(-9%,  -7%)    scale(1.08); opacity: 0.10; }
+  50%  { transform: translate(-50%, -50%) translate(-5%,  -10%)   scale(1.06); opacity: 0.09; }
+  60%  { transform: translate(-50%, -50%) translate(2%,   -9%)    scale(1.04); opacity: 0.11; }
+  70%  { transform: translate(-50%, -50%) translate(7%,   -5%)    scale(1.06); opacity: 0.12; }
+  80%  { transform: translate(-50%, -50%) translate(10%,  -1%)    scale(1.08); opacity: 0.10; }
+  90%  { transform: translate(-50%, -50%) translate(8%,    4%)    scale(1.07); opacity: 0.09; }
   100% { transform: translate(-50%, -50%) translate(5%,    8%)    scale(1.05); opacity: 0.08; }
 }
 
@@ -45,13 +56,25 @@
   100% { transform: translate(40px, 40px); }
 }
 
-/* ── Light mode orb drift ── */
+/* ── Light mode orb drift — very slow, circular ── */
 @keyframes orb-light {
-  0%   { transform: translate(-50%, -50%) translate(0%,   0%)   scale(1.00); opacity: 0.04; }
-  25%  { transform: translate(-50%, -50%) translate(8%,  -5%)   scale(1.06); opacity: 0.07; }
-  50%  { transform: translate(-50%, -50%) translate(0%,   8%)   scale(1.03); opacity: 0.05; }
-  75%  { transform: translate(-50%, -50%) translate(-8%, -3%)   scale(1.06); opacity: 0.07; }
-  100% { transform: translate(-50%, -50%) translate(0%,   0%)   scale(1.00); opacity: 0.04; }
+  0%   { transform: translate(-50%, -50%) translate(0%,    0%)   scale(1.00); opacity: 0.05; }
+  12%  { transform: translate(-50%, -50%) translate(5%,   -3%)   scale(1.02); opacity: 0.06; }
+  25%  { transform: translate(-50%, -50%) translate(8%,   -5%)   scale(1.05); opacity: 0.07; }
+  37%  { transform: translate(-50%, -50%) translate(5%,    2%)   scale(1.03); opacity: 0.06; }
+  50%  { transform: translate(-50%, -50%) translate(0%,    7%)   scale(1.02); opacity: 0.05; }
+  62%  { transform: translate(-50%, -50%) translate(-5%,   3%)   scale(1.03); opacity: 0.06; }
+  75%  { transform: translate(-50%, -50%) translate(-8%,  -3%)   scale(1.05); opacity: 0.07; }
+  87%  { transform: translate(-50%, -50%) translate(-4%,  -5%)   scale(1.02); opacity: 0.06; }
+  100% { transform: translate(-50%, -50%) translate(0%,    0%)   scale(1.00); opacity: 0.05; }
+}
+
+/* ── Light mode secondary orb ── */
+@keyframes orb-light-2 {
+  0%   { transform: translate(-50%, -50%) translate(-5%,  -5%)   scale(1.03); opacity: 0.03; }
+  33%  { transform: translate(-50%, -50%) translate(6%,   -3%)   scale(1.06); opacity: 0.05; }
+  66%  { transform: translate(-50%, -50%) translate(-3%,   6%)   scale(1.04); opacity: 0.04; }
+  100% { transform: translate(-50%, -50%) translate(-5%,  -5%)   scale(1.03); opacity: 0.03; }
 }
 
 @keyframes flash-green {
@@ -219,7 +242,7 @@
 
 [data-mantine-color-scheme='dark'] .canvas-container {
   background-color: #010d1f;
-  animation: surface-breath 16s ease-in-out infinite;
+  animation: surface-breath 24s linear infinite;
 }
 
 [data-mantine-color-scheme='light'] .canvas-container {
@@ -243,24 +266,24 @@
 [data-mantine-color-scheme='dark'] .canvas-bg-glow {
   background: radial-gradient(
     circle at center,
-    rgba(14, 165, 233, 0.22) 0%,
-    rgba(6,  182, 212, 0.10) 35%,
-    rgba(2,  132, 199, 0.05) 55%,
+    rgba(14, 165, 233, 0.20) 0%,
+    rgba(6,  182, 212, 0.09) 35%,
+    rgba(2,  132, 199, 0.04) 55%,
     transparent 70%
   );
-  filter: blur(72px);
-  animation: orb-primary 28s ease-in-out infinite;
+  filter: blur(80px);
+  animation: orb-primary 42s linear infinite;
 }
 
 [data-mantine-color-scheme='light'] .canvas-bg-glow {
   background: radial-gradient(
     circle at center,
-    rgba(0, 120, 215, 0.10) 0%,
+    rgba(0, 120, 215, 0.09) 0%,
     rgba(0,  80, 200, 0.04) 45%,
     transparent 70%
   );
-  filter: blur(60px);
-  animation: orb-light 24s ease-in-out infinite;
+  filter: blur(70px);
+  animation: orb-light 36s linear infinite;
 }
 
 /* ── SECONDARY glow orb (depth layer) ── */
@@ -279,16 +302,23 @@
 [data-mantine-color-scheme='dark'] .canvas-bg-glow-2 {
   background: radial-gradient(
     circle at center,
-    rgba(56, 189, 248, 0.12) 0%,
-    rgba(14, 165, 233, 0.06) 40%,
+    rgba(56, 189, 248, 0.10) 0%,
+    rgba(14, 165, 233, 0.05) 40%,
     transparent 65%
   );
-  filter: blur(90px);
-  animation: orb-secondary 38s ease-in-out infinite;
+  filter: blur(100px);
+  animation: orb-secondary 55s linear infinite;
 }
 
 [data-mantine-color-scheme='light'] .canvas-bg-glow-2 {
-  display: none;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 100, 200, 0.06) 0%,
+    rgba(0,  60, 180, 0.02) 45%,
+    transparent 65%
+  );
+  filter: blur(80px);
+  animation: orb-light-2 45s linear infinite;
 }
 
 /* ── SVG canvas above glow layers ── */
