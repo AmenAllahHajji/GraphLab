@@ -168,8 +168,8 @@ const ALGORITHM_DOCS: Record<CinemaAlgorithm, { title: string, description: stri
   },
   EulerienPath: {
     title: "Chemin/Cycle Eulérien",
-    description: "Trouve un chemin qui emprunte chaque arête du graphe exactement une fois. S'il revient au point de départ, c'est un Cycle Eulérien.",
-    complexity: "Temps: O(V + E) | Espace: O(E)",
+    description: "Cette implémentation détermine si un graphe orienté admet un chemin ou un circuit eulérien, et étend cette analyse au cas non orienté, en concluant par un verdict sur le caractère eulérien du graphe.",
+    complexity: "Complexité temporelle: O(V + E)\nV = nombre de sommets, E = nombre d'arêtes\nComplexité spatiale: O(E)",
     useCase: "Problème du postier chinois, tracé de circuits, ramassage des ordures ménagères.",
     steps: [
       "Vérification : Vérifiez si le graphe possède 0 ou exactement 2 nœuds de degré impair. Sinon, aucun chemin eulérien n'est mathématiquement possible.",
