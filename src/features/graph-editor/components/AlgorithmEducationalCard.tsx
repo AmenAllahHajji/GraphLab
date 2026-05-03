@@ -206,7 +206,7 @@ const ALGORITHM_DOCS: Record<CinemaAlgorithm, { title: string, description: stri
       "Normalisation : Appliquez une fonction de normalisation pour éliminer les doublons (ex: 1→2→3→1 et 2→3→1→2 sont identiques).",
       "Résultat final : Retournez la liste complète et dédupliquée de tous les cycles/circuits trouvés."
     ],
-    videoUrl: "https://www.youtube.com/embed/PQq6P2vNyC0"
+    videoUrl: "https://www.youtube.com/embed/wqGv_kii6Vk"
   }
 }
 

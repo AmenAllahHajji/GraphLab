@@ -671,23 +671,20 @@ export function buildEulerianTraceReport(
   const eulerianTrace = properties.hasEulerianPathOrChain ? findEulerianPathOrCircuit(nodes, edges, directed) : null;
   const chainTrace = eulerianTrace;
   const cycleTrace = properties.isEulerianGraph ? eulerianTrace : null;
-  // Libellés selon orientation
-  const pathLabel = directed ? 'Chemin' : 'Chaîne';
-  const pathLabelLower = directed ? 'chemin' : 'chaîne';
-  const circuitLabel = directed ? 'Circuit' : 'Cycle';
-  const circuitLabelLower = directed ? 'circuit' : 'cycle';
+  let chainMessage = '';
+  let cycleMessage = '';
+  let verdictMessage = '';
 
-  const chainMessage = properties.hasEulerianPathOrChain
-    ? `${pathLabel} eulérien: oui. Trace du ${pathLabelLower}: ${chainTrace ? chainTrace.join(' → ') : 'trace indisponible'}.`
-    : `${pathLabel} eulérien: non.`;
-
-  const cycleMessage = properties.isEulerianGraph
-    ? `${circuitLabel} eulérien: oui. Trace du ${circuitLabelLower}: ${cycleTrace ? cycleTrace.join(' → ') : 'trace indisponible'}.`
-    : `${circuitLabel} eulérien: non. Aucun ${circuitLabelLower} eulérien n'existe dans ce graphe.`;
-
-  const verdictMessage = properties.isEulerianGraph
-    ? 'Graphe eulérien: oui.'
-    : 'Graphe eulérien: non.';
+  if (!properties.isConnexe) {
+    chainMessage = 'Le graphe est non connexe, aucune chaîne ou cycle eulérien ne peut exister.';
+  } else if (properties.isEulerianGraph) {
+    chainMessage = 'Le graphe admet une chaîne eulérienne.';
+    cycleMessage = 'Le graphe est eulérien (il admet un cycle eulérien).';
+  } else if (properties.hasEulerianPathOrChain) {
+    chainMessage = 'Le graphe admet une chaîne eulérienne.';
+  } else {
+    verdictMessage = 'Le graphe n’admet ni chaîne ni cycle eulérien.';
+  }
 
   return {
     properties,

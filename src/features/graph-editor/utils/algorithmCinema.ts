@@ -1130,6 +1130,7 @@ function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
   const chainStatus = report.chainMessage
   const cycleStatus = report.cycleMessage
   const verdict = report.verdictMessage
+  const resultMessages = [chainStatus, cycleStatus, verdict].filter((message) => message.trim().length > 0)
 
   steps.push({
     narration: `Analyse eulérienne du graphe: ${graph.nodes.length} sommet(s), ${graph.edges.length} arête(s).`,
@@ -1152,26 +1153,14 @@ function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     treeEdges: graph.edges.map((edge) => edge.id),
   })
 
-  steps.push({
-    narration: chainStatus,
-    visited: graph.nodes,
-    frontier: properties.oddNodes,
-    treeEdges: [],
-  })
-
-  steps.push({
-    narration: cycleStatus,
-    visited: graph.nodes,
-    frontier: [],
-    treeEdges: [],
-  })
-
-  steps.push({
-    narration: verdict,
-    visited: graph.nodes,
-    frontier: [],
-    treeEdges: [],
-  })
+  for (const message of resultMessages) {
+    steps.push({
+      narration: message,
+      visited: graph.nodes,
+      frontier: properties.oddNodes,
+      treeEdges: [],
+    })
+  }
 
   if (!properties.hasEulerianPathOrChain || !report.chainTrace) {
     return steps
@@ -1217,12 +1206,14 @@ function buildEulerienProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     })
   }
 
-  steps.push({
-    narration: `${report.chainMessage} ${report.cycleMessage} ${report.verdictMessage}`,
-    visited: report.chainTrace,
-    frontier: [],
-    treeEdges: Array.from(usedEdges),
-  })
+  if (resultMessages.length > 0) {
+    steps.push({
+      narration: resultMessages.join(' '),
+      visited: report.chainTrace,
+      frontier: [],
+      treeEdges: Array.from(usedEdges),
+    })
+  }
 
   return steps
 }
