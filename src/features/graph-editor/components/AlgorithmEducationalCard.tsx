@@ -332,10 +332,16 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
           
           {viewMode === 'detailed' && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-              <h4 className="text-xs font-black uppercase text-purple-600 dark:text-purple-400 tracking-widest mb-3 flex items-center gap-1.5 sticky top-0 bg-slate-50/90 dark:bg-slate-800/90 py-1.5 backdrop-blur-sm z-10">
+              <h4 
+                className="text-xs font-black uppercase tracking-widest mb-3 flex items-center gap-1.5 sticky top-0 py-1.5 backdrop-blur-sm z-10"
+                style={{ color: 'var(--app-accent)', backgroundColor: 'var(--app-surface-strong)' }}
+              >
                 Explication Pas-à-Pas
               </h4>
-              <div className="relative border-l-2 border-slate-300 dark:border-slate-700/50 ml-3 pl-5 pb-3 space-y-6">
+              <div 
+                className="relative border-l-2 ml-3 pl-5 pb-3 space-y-6"
+                style={{ borderColor: 'var(--app-border)' }}
+              >
                 {info.steps.map((step, idx) => {
                   const parts = step.split(' : ')
                   const title = parts.length > 1 ? parts[0] : `Étape ${idx + 1}`
@@ -344,9 +350,12 @@ export function AlgorithmEducationalCard({ algorithm }: Props) {
                   return (
                     <div key={idx} className="relative">
                       {/* Timeline Dot */}
-                      <div className="absolute -left-[27px] top-1.5 h-3 w-3 rounded-full bg-white dark:bg-slate-900 border-2 border-purple-400 dark:border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)] dark:shadow-[0_0_10px_rgba(168,85,247,0.5)]"></div>
-                      <h5 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">{title}</h5>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">{content}</p>
+                      <div 
+                        className="absolute -left-[27px] top-1.5 h-3 w-3 rounded-full border-2 shadow-[0_0_10px_rgba(56,189,248,0.3)] dark:shadow-[0_0_10px_rgba(56,189,248,0.5)]"
+                        style={{ backgroundColor: 'var(--app-surface)', borderColor: 'var(--app-accent)' }}
+                      ></div>
+                      <h5 className="text-sm font-bold mb-1" style={{ color: 'var(--app-text)' }}>{title}</h5>
+                      <p className="text-sm leading-relaxed font-medium" style={{ color: 'var(--app-muted)' }}>{content}</p>
                     </div>
                   )
                 })}
