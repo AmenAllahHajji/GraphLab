@@ -429,6 +429,47 @@ function buildKruskalsProgram(graph: GraphState): CinemaStep[] {
     const cycleWouldForm = find(edge.from) === find(edge.to)
 
     if (cycleWouldForm) {
+      // ── Find the path in the current MST that forms the cycle ──────────────
+      const cycleEdges: string[] = []
+      const adj = new Map<NodeId, Array<{ to: NodeId; edgeId: string }>>()
+      const mstEdgeSet = new Set(mstEdges)
+      
+      for (const e of graph.edges) {
+        if (mstEdgeSet.has(e.id)) {
+          if (!adj.has(e.from)) adj.set(e.from, [])
+          if (!adj.has(e.to)) adj.set(e.to, [])
+          adj.get(e.from)!.push({ to: e.to, edgeId: e.id })
+          adj.get(e.to)!.push({ to: e.from, edgeId: e.id })
+        }
+      }
+
+      const queue: Array<{ node: NodeId; path: string[] }> = [{ node: edge.from, path: [] }]
+      const visited = new Set<NodeId>([edge.from])
+      let foundPath: string[] = []
+
+      while (queue.length > 0) {
+        const { node, path } = queue.shift()!
+        if (node === edge.to) {
+          foundPath = path
+          break
+        }
+        for (const neighbor of (adj.get(node) || [])) {
+          if (!visited.has(neighbor.to)) {
+            visited.add(neighbor.to)
+            queue.push({ node: neighbor.to, path: [...path, neighbor.edgeId] })
+          }
+        }
+      }
+
+      const edgeColors: Record<string, string> = {}
+      foundPath.forEach(id => { edgeColors[id] = '#ef4444' }) // Red highlight for cycle
+      edgeColors[edge.id] = '#ef4444' // The rejected edge itself
+
+      const nodeColors: Record<number, string> = {}
+      // Optional: highlight nodes in the cycle too
+      const cycleNodes = new Set<NodeId>([edge.from, edge.to])
+      // we could trace nodes from foundPath if needed
+
       // Rejected — would create a cycle
       steps.push({
         narration: `❌ Arête ${edge.from}↔${edge.to} (p=${edge.w}) rejetée — formerait un cycle dans le MST.`,
@@ -439,6 +480,7 @@ function buildKruskalsProgram(graph: GraphState): CinemaStep[] {
         rejectedEdgeId: edge.id,
         mstEdges: [...mstEdges],
         mstWeight: totalWeight,
+        edgeColors,
       })
     } else {
       // Accepted — merge components
@@ -1584,10 +1626,21 @@ function buildAllCyclesProgram(graph: GraphState): CinemaStep[] {
     treeEdges: []
   })
 
+  // Accumulate all for final view
+  const finalNodeColors: Record<number, string> = {}
+  const finalEdgeColors: Record<string, string> = {}
+  const finalTreeEdgesSet = new Set<string>()
+
   // Visualiser chaque cycle
   allCycles.forEach((cycle, cycleIndex) => {
     // Trouver les arêtes du cycle
     const treeEdges: string[] = []
+    const edgeColors: Record<string, string> = {}
+    const nodeColors: Record<number, string> = {}
+    
+    // Pick a color from the component palette
+    const color = COMPONENT_COLORS[cycleIndex % COMPONENT_COLORS.length]
+
     for (let i = 0; i < cycle.length - 1; i++) {
       const from = cycle[i]
       const to = cycle[i + 1]
@@ -1597,15 +1650,26 @@ function buildAllCyclesProgram(graph: GraphState): CinemaStep[] {
       )
       if (matchingEdge) {
         treeEdges.push(matchingEdge.id)
+        edgeColors[matchingEdge.id] = color
+        
+        finalTreeEdgesSet.add(matchingEdge.id)
+        finalEdgeColors[matchingEdge.id] = color
       }
     }
+    
+    cycle.forEach(nodeId => {
+      nodeColors[nodeId] = color
+      finalNodeColors[nodeId] = color
+    })
 
     const cycleLabel = cycle.join(' → ')
     steps.push({
       narration: `${cycleType} #${cycleIndex + 1}: ${cycleLabel}`,
       visited: cycle,
       frontier: [],
-      treeEdges
+      treeEdges,
+      edgeColors,
+      nodeColors,
     })
   })
 
@@ -1613,7 +1677,9 @@ function buildAllCyclesProgram(graph: GraphState): CinemaStep[] {
     narration: `Résultat final: ${allCycles.length} ${cycleLabelEn} au total ont été détectés dans ce graphe.`,
     visited: graph.nodes,
     frontier: [],
-    treeEdges: []
+    treeEdges: Array.from(finalTreeEdgesSet),
+    edgeColors: finalEdgeColors,
+    nodeColors: finalNodeColors,
   })
 
   return steps

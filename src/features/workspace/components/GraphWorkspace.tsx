@@ -43,12 +43,13 @@ export function GraphWorkspace() {
             <ModeSwitch />
           </div>
 
-          <GraphHistoryTimeline />
-
           <div className={`grid grid-cols-1 gap-6 transition-all duration-500 ${isDevMode ? 'xl:grid-cols-[1fr_400px]' : 'xl:grid-cols-1'}`}>
-            <Paper withBorder radius="md" className="relative overflow-hidden p-1 min-h-[600px]">
-              {mode === 'visual' ? <GraphCanvas /> : <MatrixEditor />}
-            </Paper>
+            <Stack gap="md">
+              <Paper withBorder radius="md" className="relative overflow-hidden p-1 min-h-[50vh] md:min-h-[600px]">
+                {mode === 'visual' ? <GraphCanvas /> : <MatrixEditor />}
+              </Paper>
+              <GraphHistoryTimeline />
+            </Stack>
             {isDevMode && (
               <div className="flex flex-col animate-in fade-in slide-in-from-right-4 duration-500 overflow-hidden">
                 <GraphContractPanel />
