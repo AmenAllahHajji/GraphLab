@@ -1,7 +1,8 @@
+import { path } from 'd3'
 import type { GraphEdge, GraphState, NodeId } from '../../graph/model/types'
-import { findEulerianPathOrCircuit, buildEulerianTraceReport, findAllDirectedCycles, findAllUndirectedCycles } from '../../graph/utils/graphAnalysis'
+import { findEulerianPathOrCircuit, buildEulerianTraceReport } from '../../graph/utils/graphAnalysis'
 
-export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest' | 'StronglyConnectedComponents' | 'Bellman' | 'BellmanFord' | 'WelshPowell' | 'EulerienPath' | 'RechercheChaine' | 'AllCycles'
+export type CinemaAlgorithm = 'BFS' | 'DFS' | 'Dijkstra' | 'Prims' | 'Kruskals' | 'MaxFlow' | 'ConnectedComponents' | 'SpanningForest' | 'StronglyConnectedComponents' | 'Bellman' | 'BellmanFord' | 'WelshPowell' | 'EdgeColoring' | 'EulerienPath' | 'RechercheChaine'
 
 export interface CinemaStep {
   narration: string
@@ -25,6 +26,24 @@ export interface CinemaStep {
   /** Custom colors for nodes and edges (Spanning Forest, etc.) */
   nodeColors?: Record<number, string>
   edgeColors?: Record<string, string>
+  // graphe résiduel pour FLowMAX, avec capacité restante et indication de sens (forward/backward)
+  residualEdges?: Array<{
+    from: NodeId
+    to: NodeId
+    capacity: number
+    isBackward: boolean
+    originalEdgeId: string
+  }>,
+  augmentingPathIndex?: number   // numéro du chemin (1er, 2ème, 3ème...)
+  bottleneck?: number,
+  // valeur du bottleneck de ce chemin
+  pathHistory?: Array<{
+  index: number
+  bottleneck: number
+  edgeIds: string[]
+  edgeLabels: string[]   //: "1→2", "2→3" etc.
+
+}>
 }
 
 export interface CinemaProgram {
@@ -195,9 +214,21 @@ function buildDfsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
 
   return steps
 }
-
+/*
 function buildDijkstraProgram(graph: GraphState, source: NodeId): CinemaStep[] {
   const steps: CinemaStep[] = []
+
+  // Edge Case: Negative Weights
+  const hasNegativeWeights = graph.edges.some(e => e.weight < 0)
+  if (hasNegativeWeights) {
+    steps.push({
+      narration: "⚠️ Erreur : L'algorithme de Dijkstra ne supporte pas les poids négatifs. Veuillez utiliser Bellman-Ford pour ce graphe.",
+      visited: [],
+      frontier: [],
+      treeEdges: [],
+    })
+    return steps
+  }
   const distances = new Map<NodeId, number>()
   const visited = new Set<NodeId>()
   const treeEdges: string[] = []
@@ -306,7 +337,7 @@ function buildDijkstraProgram(graph: GraphState, source: NodeId): CinemaStep[] {
 
   return steps
 }
-
+*/
 function unionFind(nodes: NodeId[]) {
   const parent = new Map<NodeId, NodeId>()
   const rank = new Map<NodeId, number>()
@@ -522,14 +553,27 @@ function buildKruskalsProgram(graph: GraphState): CinemaStep[] {
 
 function buildPrimsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
   const steps: CinemaStep[] = []
+
+  // ── Vérification graphe non dirigé ───────────────────────────────────────
+  if (graph.directed) {
+    steps.push({
+      narration: "Prim nécessite un graphe non orienté.",
+      visited: [], frontier: [], treeEdges: [],
+    })
+    return steps
+  }
+
   const visited = new Set<NodeId>([source])
   const mstEdges: string[] = []
   let totalWeight = 0
 
+  // ── PHASE 0 : Initialisation ──────────────────────────────────────────────
   steps.push({
-    narration: `Start Prim's at node ${source}.`,
+    narration: `Initialisation — On part du nœud ${source}. `
+             + `Tous les autres nœuds {${graph.nodes.filter(n => n !== source).join(', ')}} `
+             + `sont non visités. L'arbre MST est vide.`,
     visited: [source],
-    frontier: [],
+    frontier: graph.nodes.filter(n => n !== source),
     treeEdges: [],
     currentNode: source,
     mstEdges: [],
@@ -537,23 +581,65 @@ function buildPrimsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
   })
 
   while (visited.size < graph.nodes.length) {
-    let best: GraphEdge | null = null
 
+    // ── PHASE 1 : Identifier les arêtes candidates (la coupe) ─────────────
+    const candidates: GraphEdge[] = []
     for (const edge of graph.edges) {
       const fromVisited = visited.has(edge.from)
-      const toVisited = visited.has(edge.to)
-      const crossesCut = fromVisited !== toVisited
-      if (!crossesCut) {
-        continue
-      }
-      if (best === null || edge.weight < best.weight) {
-        best = edge
+      const toVisited   = visited.has(edge.to)
+      if (fromVisited !== toVisited) {
+        candidates.push(edge)
       }
     }
 
-    if (best === null) {
-      break
+    if (candidates.length === 0) break
+
+    steps.push({
+      narration: `Coupe actuelle — Visités : {${[...visited].join(', ')}}. `
+               + `Non-visités : {${graph.nodes.filter(n => !visited.has(n)).join(', ')}}. `
+               + `Arêtes candidates : ${candidates.map(e => `(${e.from},${e.to}) w=${e.weight}`).join(' | ')}.`,
+      visited: [...visited],
+      frontier: graph.nodes.filter(n => !visited.has(n)),
+      treeEdges: [...mstEdges],
+      mstEdges: [...mstEdges],
+      mstWeight: totalWeight,
+    })
+
+    // ── PHASE 2 : Examiner chaque candidat ───────────────────────────────
+    let best: GraphEdge | null = null
+
+    for (const edge of candidates) {
+      const isBetter = best === null || edge.weight < best.weight
+      const isEqual  = best !== null && edge.weight === best.weight
+      const isWorse  = best !== null && edge.weight > best.weight
+
+      steps.push({
+        narration: isBetter
+          ? best === null
+            ? `Examen de (${edge.from},${edge.to}) w=${edge.weight} → première candidate, retenue.`
+            : `Examen de (${edge.from},${edge.to}) w=${edge.weight} → meilleure que (${best.from},${best.to}) w=${best.weight}, remplace la candidate.`
+          : isEqual
+            ? `Examen de (${edge.from},${edge.to}) w=${edge.weight} → même poids que (${best!.from},${best!.to}) w=${best!.weight}, on garde la première trouvée.`
+            : `Examen de (${edge.from},${edge.to}) w=${edge.weight} → plus coûteuse que (${best!.from},${best!.to}) w=${best!.weight}, ignorée.`,
+        visited: [...visited],
+        frontier: graph.nodes.filter(n => !visited.has(n)),
+        treeEdges: [...mstEdges],
+        currentEdgeId: edge.id,
+        mstEdges: [...mstEdges],
+        mstWeight: totalWeight,
+        ...(isBetter
+          ? { mstNewEdgeId: edge.id }
+          : isWorse
+            ? { rejectedEdgeId: edge.id }
+            : {}  // égale → ni vert ni rouge, juste examinée
+        ),
+      })
+
+      if (isBetter) best = edge
     }
+
+    // ── PHASE 3 : Ajouter la meilleure arête à l'arbre ────────────────────
+    if (best === null) break
 
     const nextNode = visited.has(best.from) ? best.to : best.from
     visited.add(nextNode)
@@ -561,30 +647,57 @@ function buildPrimsProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     totalWeight += best.weight
 
     steps.push({
-      narration: `Add edge ${best.id}. Include node ${nextNode}.`,
+      narration: `Choix — (${best.from},${best.to}) w=${best.weight} est la moins coûteuse parmi les candidates. `
+               + `On ajoute le nœud ${nextNode} à l'arbre. `
+               + `Poids total MST = ${totalWeight}.`,
       visited: [...visited],
-      frontier: graph.nodes.filter((nodeId) => !visited.has(nodeId)),
-      treeEdges: [],
+      frontier: graph.nodes.filter(n => !visited.has(n)),
+      treeEdges: [...mstEdges],
       currentNode: nextNode,
       currentEdgeId: best.id,
       mstEdges: [...mstEdges],
       mstNewEdgeId: best.id,
       mstWeight: totalWeight,
     })
+
+    // ── PHASE 4 : Bilan de l'itération ───────────────────────────────────
+    const remaining = graph.nodes.filter(n => !visited.has(n))
+    if (remaining.length > 0) {
+      steps.push({
+        narration: `Bilan — MST contient ${mstEdges.length} arête(s), poids cumulé = ${totalWeight}. `
+                 + `Il reste ${remaining.length} nœud(s) à visiter : {${remaining.join(', ')}}. `
+                 + `On recommence avec la nouvelle coupe.`,
+        visited: [...visited],
+        frontier: remaining,
+        treeEdges: [...mstEdges],
+        mstEdges: [...mstEdges],
+        mstWeight: totalWeight,
+      })
+    }
   }
 
+  // ── PHASE FINALE ──────────────────────────────────────────────────────────
+  const isComplete = visited.size === graph.nodes.length
   steps.push({
-    narration: `Prim's complete. MST weight ${totalWeight}.`,
+    narration: isComplete
+      ? `Prim terminé ✓ — L'arbre couvrant minimal est complet. `
+      + `${mstEdges.length} arête(s), poids total = ${totalWeight}. `
+      + `Arêtes MST : ${mstEdges.map(eid => {
+          const e = graph.edges.find(x => x.id === eid)
+          return e ? `(${e.from},${e.to}) w=${e.weight}` : eid
+        }).join(', ')}.`
+      : `Prim terminé — Graphe non connexe. `
+      + `Arbre partiel : ${mstEdges.length} arête(s), poids = ${totalWeight}. `
+      + `Nœuds non atteints : {${graph.nodes.filter(n => !visited.has(n)).join(', ')}}.`,
     visited: [...visited],
     frontier: [],
-    treeEdges: [],
+    treeEdges: [...mstEdges],
     mstEdges: [...mstEdges],
     mstWeight: totalWeight,
   })
 
   return steps
 }
-
 function bfsAugmentingPath(
   graph: GraphState,
   source: NodeId,
@@ -670,7 +783,7 @@ function bfsAugmentingPath(
 
   return { edgeIds: pathEdges, bottleneck }
 }
-
+/*
 function buildMaxFlowProgram(graph: GraphState, source: NodeId, target: NodeId): CinemaStep[] {
   const steps: CinemaStep[] = []
   const flowByEdge = new Map<string, number>()
@@ -746,7 +859,326 @@ function buildMaxFlowProgram(graph: GraphState, source: NodeId, target: NodeId):
 
   return steps
 }
+*/
+// FORD-FULKERSON — Recherche d'un chemin augmentant via DFS
+// ─────────────────────────────────────────────────────────────────────────────
 
+function dfsAugmentingPath(
+  graph: GraphState,               // le graphe complet
+  source: NodeId,                  // nœud de départ
+  sink: NodeId,                    // nœud d'arrivée (le puits)
+  flowByEdge: Map<string, number>, // flow actuel sur chaque arête
+): { edgeIds: string[]; directions: (1 | -1)[]; bottleneck: number } | null {
+
+  // On mémorise les nœuds déjà visités pour éviter les boucles infinies
+  // On y met la source directement car on part d'elle
+  const visited = new Set<NodeId>([source])
+
+  // Le chemin en cours d'exploration
+  // Chaque entrée = une arête empruntée + sa direction (1=normal, -1=inverse)
+  const path: { edgeId: string; direction: 1 | -1; from: NodeId; to: NodeId }[] = []
+
+  // ── Exploration DFS récursive ──────────────────────────────────────────────
+  function dfs(current: NodeId): boolean {
+
+    // On est arrivé au puits → chemin trouvé → on s'arrête
+    if (current === sink) return true
+
+    // On regarde toutes les arêtes du graphe
+    for (const edge of graph.edges) {
+
+      // ── CAS 1 : arête FORWARD (sens normal) ───────────────────────────────
+      // Cette arête part du nœud où on est
+      if (edge.from === current) {
+
+        // Capacité de l'arête (minimum 1 pour éviter les capacités nulles)
+        const capacity = Math.max(1, edge.weight)
+
+        // Flow qui circule déjà sur cette arête
+        const flow = flowByEdge.get(edge.id) ?? 0
+
+        // Place restante = capacité - ce qui est déjà utilisé
+        const residual = capacity - flow
+
+        // On emprunte cette arête seulement si :
+        // - il reste de la place (residual > 0)
+        // - on n'a pas déjà visité le nœud au bout
+        if (residual > 0 && !visited.has(edge.to)) {
+
+          // On marque le nœud suivant comme visité
+          visited.add(edge.to)
+
+          // On ajoute cette arête au chemin en cours (sens normal = 1)
+          path.push({ edgeId: edge.id, direction: 1, from: edge.from, to: edge.to })
+
+          // On continue l'exploration depuis le nœud suivant
+          // Si on atteint le puits → on remonte immédiatement
+          if (dfs(edge.to)) return true
+
+          // Cette route ne mène pas au puits → backtrack
+          // On efface cette arête du chemin et on essaie une autre route
+          path.pop()
+        }
+      }
+
+      // ── CAS 2 : arête BACKWARD (sens inverse) ─────────────────────────────
+      // Cette arête arrive au nœud où on est
+      // On peut la remonter à l'envers pour annuler du flow déjà envoyé
+      // C'est la magie de Ford-Fulkerson : corriger les mauvais choix précédents
+      if (edge.to === current) {
+
+        // Flow qui circule sur cette arête
+        const flow = flowByEdge.get(edge.id) ?? 0
+
+        // On peut remonter cette arête seulement si :
+        // - du flow y circule déjà (sinon rien à annuler)
+        // - on n'a pas déjà visité le nœud source de cette arête
+        if (flow > 0 && !visited.has(edge.from)) {
+
+          // On marque le nœud comme visité
+          visited.add(edge.from)
+
+          // On ajoute cette arête au chemin (sens inverse = -1)
+          path.push({ edgeId: edge.id, direction: -1, from: edge.to, to: edge.from })
+
+          // On continue l'exploration depuis le nœud source de cette arête
+          if (dfs(edge.from)) return true
+
+          // Backtrack : cette route ne mène pas au puits non plus
+          path.pop()
+        }
+      }
+    }
+
+    // Aucune arête exploitable depuis ce nœud → cul-de-sac
+    return false
+  }
+
+  // On lance le DFS depuis la source
+  // Si on ne trouve aucun chemin → on retourne null (flow maximum atteint)
+  if (!dfs(source)) return null
+
+  // ── Calcul du bottleneck ───────────────────────────────────────────────────
+  // Le bottleneck = la place minimale sur toutes les arêtes du chemin
+  // C'est lui qui limite la quantité de flow qu'on peut envoyer
+  let bottleneck = Infinity
+
+  for (const { edgeId, direction } of path) {
+
+    // On récupère l'arête complète depuis son ID
+    const edge = graph.edges.find(e => e.id === edgeId)!
+
+    const residual =
+      direction === 1
+        // Arête forward : place restante = capacité - flow actuel
+        ? Math.max(1, edge.weight) - (flowByEdge.get(edgeId) ?? 0)
+        // Arête backward : place restante = flow actuel (ce qu'on peut annuler)
+        : flowByEdge.get(edgeId) ?? 0
+
+    // On garde le minimum → c'est le goulot d'étranglement du chemin
+    bottleneck = Math.min(bottleneck, residual)
+  }
+
+  // On retourne le chemin trouvé avec ses directions et son bottleneck
+  return {
+    edgeIds: path.map(p => p.edgeId),
+    directions: path.map(p => p.direction),
+    bottleneck,
+  }
+}
+
+function buildResidualEdges(
+  graph: GraphState,
+  flowByEdge: Map<string, number>
+): CinemaStep['residualEdges'] {
+  const residual: CinemaStep['residualEdges'] = []
+
+  for (const edge of graph.edges) {
+    const flow = flowByEdge.get(edge.id) ?? 0
+    const capacity = Math.max(1, edge.weight)
+
+    const forwardResidual = capacity - flow
+    if (forwardResidual > 0) {
+      residual.push({
+        from: edge.from,
+        to: edge.to,
+        capacity: forwardResidual,
+        isBackward: false,
+        originalEdgeId: edge.id,
+      })
+    }
+
+    if (flow > 0) {
+      residual.push({
+        from: edge.to,
+        to: edge.from,
+        capacity: flow,
+        isBackward: true,
+        originalEdgeId: edge.id,
+      })
+    }
+  }
+
+  return residual
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// FORD-FULKERSON — Construction des étapes visuelles
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildMaxFlowProgram(graph: GraphState, source: NodeId, target: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+
+  // Flow actuel sur chaque arête
+  const flowByEdge = new Map<string, number>()
+
+  // Initialisation : on peut avoir du flot initial qui circule
+  for (const edge of graph.edges) {
+    //flowByEdge.set(edge.id, 0)
+    flowByEdge.set(edge.id, edge.flow ?? 0)
+
+  }
+   // Compteur de chemins augmentants
+  let pathIndex = 0
+
+  // Historique des chemins trouvés
+ const pathHistory: Array<{ index: number; bottleneck: number; edgeIds: string[]; edgeLabels: string[] }> = []
+
+
+  // Première étape visuelle : état initial du graphe
+  steps.push({
+    narration: `Début Ford-Fulkerson de ${source} vers ${target}.`,
+    visited: [source],
+    frontier: [],
+    treeEdges: [],
+    currentNode: source,
+    flowByEdge: Object.fromEntries(flowByEdge.entries()),
+    residualEdges: buildResidualEdges(graph, flowByEdge),
+    augmentingPathIndex: 0,
+    bottleneck: 0,
+    pathHistory: [],
+
+  })
+
+  // ── Boucle principale Ford-Fulkerson ──────────────────────────────────────
+  // On cherche des chemins augmentants jusqu'à ce qu'il n'en existe plus
+  while (true) {
+
+    // Recherche d'un chemin augmentant via DFS
+    const augmenting = dfsAugmentingPath(graph, source, target, flowByEdge)
+
+    // Plus aucun chemin → le flow maximum est atteint → on sort
+    if (augmenting === null) break
+    pathIndex++;
+    pathHistory.push({
+       index: pathIndex,
+       bottleneck: augmenting.bottleneck,
+       edgeIds: augmenting.edgeIds,
+          // ── AJOUTER ──────────────────────────────────────────────────────────
+  edgeLabels: augmenting.edgeIds.map((eid, i) => {
+    const direction = augmenting.directions[i]
+    const edge = graph.edges.find(e => e.id === eid)
+    if (!edge) return eid
+    // Forward : sens normal
+    // Backward : sens inverse (on affiche avec ↩ pour indiquer l'annulation)
+    return direction === 1
+      ? `${edge.from}→${edge.to}`
+      : `${edge.to}→${edge.from} ↩`
+  }),
+})
+
+    // On enregistre le chemin trouvé visuellement
+    steps.push({
+      narration: `Chemin augmentant n°${pathIndex} trouvé, bottleneck = ${augmenting.bottleneck}.`,
+      visited: [],
+      frontier: [],
+      treeEdges: [],
+      augmentingEdgeIds: augmenting.edgeIds,
+      augmentingPathIndex: pathIndex,
+      bottleneck: augmenting.bottleneck,
+      pathHistory: [...pathHistory],
+      flowByEdge: Object.fromEntries(flowByEdge.entries()),
+      residualEdges: buildResidualEdges(graph, flowByEdge), //
+
+    })
+
+    // ── Application du flow sur chaque arête du chemin ────────────────────
+    for (let i = 0; i < augmenting.edgeIds.length; i++) {
+      const edgeId = augmenting.edgeIds[i]
+      const direction = augmenting.directions[i] // 1 = forward, -1 = backward
+
+      const edge = graph.edges.find((candidate) => candidate.id === edgeId)
+      if (!edge) continue
+
+      // Flow actuel sur cette arête
+      const current = flowByEdge.get(edge.id) ?? 0
+
+      // Capacité maximum de cette arête
+      const capacity = Math.max(1, edge.weight)
+
+      const next =
+        direction === 1
+          // Arête forward : on AJOUTE le bottleneck au flow existant
+          // Math.min empêche de dépasser la capacité maximum
+          ? Math.min(capacity, current + augmenting.bottleneck)
+          // Arête backward : on SOUSTRAIT le bottleneck (on annule du flow)
+          // Math.max empêche d'avoir un flow négatif
+          : Math.max(0, current - augmenting.bottleneck)
+
+      // On met à jour le flow de cette arête
+      flowByEdge.set(edge.id, next)
+    }
+
+    // On identifie les arêtes saturées (flow = capacité max)
+    // Ces arêtes ne peuvent plus recevoir de flow supplémentaire
+    const saturatedEdgeIds = graph.edges
+      .filter((edge) => (flowByEdge.get(edge.id) ?? 0) >= Math.max(1, edge.weight))
+      .map((edge) => edge.id)
+
+    // On enregistre l'état après application du flow
+    steps.push({
+      narration:  `Flow appliqué. +${augmenting.bottleneck} unités sur le chemin n°${pathIndex}.`,
+      visited: [],
+      frontier: [],
+      treeEdges: [],
+      augmentingEdgeIds: augmenting.edgeIds,
+      saturatedEdgeIds,
+      augmentingPathIndex: pathIndex,
+      bottleneck: augmenting.bottleneck,
+      pathHistory: [...pathHistory],
+      flowByEdge: Object.fromEntries(flowByEdge.entries()),
+      residualEdges: buildResidualEdges(graph, flowByEdge), // ← AJOUTER partout
+
+    })
+
+
+    // On retourne au début de la boucle pour chercher un nouveau chemin
+  }
+
+  // ── Calcul du flow total ───────────────────────────────────────────────────
+  // Le flow maximum = somme de tout ce qui sort de la source
+  const maxFlow = graph.edges
+    .filter((edge) => edge.from === source)
+    .reduce((sum, edge) => sum + (flowByEdge.get(edge.id) ?? 0), 0)
+
+  // Dernière étape visuelle : résultat final
+  steps.push({
+    narration:  `Ford-Fulkerson terminé. ${pathIndex} chemin(s) augmentant(s). Flow maximum = ${maxFlow}.`,
+    visited: [],
+    frontier: [],
+    treeEdges: [],
+    saturatedEdgeIds: graph.edges
+      .filter((edge) => (flowByEdge.get(edge.id) ?? 0) >= Math.max(1, edge.weight))
+      .map((edge) => edge.id),
+    augmentingPathIndex: pathIndex,
+    bottleneck: 0,
+    pathHistory: [...pathHistory],
+    flowByEdge: Object.fromEntries(flowByEdge.entries()),
+    residualEdges: buildResidualEdges(graph, flowByEdge),
+
+  })
+
+  return steps
+}
 const COMPONENT_COLORS = [
   '#3b82f6', // blue
   '#f97316', // orange
@@ -1154,6 +1586,27 @@ function buildSearchChainProgram(graph: GraphState, source: NodeId, target: Node
   const treeEdgesAccumulated: string[] = []
   let foundTarget = false
 
+  // Early exit: si la source ou la cible est isolée (aucune arête incidente), inutile de parcourir tout le graphe.
+  const hasIncidentEdges = (n: NodeId) => graph.edges.some(e => e.from === n || e.to === n)
+  if (!hasIncidentEdges(source)) {
+    steps.push({
+      narration: `❌ Abandon : la source ${source} est isolée (aucune arête incidente).`,
+      visited: [],
+      frontier: [],
+      treeEdges: []
+    })
+    return steps
+  }
+  if (!hasIncidentEdges(target)) {
+    steps.push({
+      narration: `❌ Abandon : la cible ${target} est isolée (aucune arête incidente).`,
+      visited: [],
+      frontier: [],
+      treeEdges: []
+    })
+    return steps
+  }
+
   // Étape 2: Initialisation
   steps.push({
     narration: `Sommet source: ${source}`,
@@ -1213,6 +1666,7 @@ function buildSearchChainProgram(graph: GraphState, source: NodeId, target: Node
         }
       }
     }
+    if (foundTarget) break
   }
 
   if (!foundTarget) {
@@ -1591,99 +2045,67 @@ function buildWelshPowellProgram(graph: GraphState): CinemaStep[] {
   return steps
 }
 
-function buildAllCyclesProgram(graph: GraphState): CinemaStep[] {
+// ─────────────────────────────────────────────────────────────────────────────
+// COLORATION DES ARÊTES (Greedy Edge Coloring)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildEdgeColoringProgram(graph: GraphState): CinemaStep[] {
   const steps: CinemaStep[] = []
-  const isDirected = graph.directed
-  const cycleType = isDirected ? 'cycle' : 'circuit'
-  const cycleLabelEn = isDirected ? 'cycles' : 'circuits'
-
-  // Récupérer tous les cycles
-  const allCycles = isDirected
-    ? findAllDirectedCycles(graph.nodes, graph.edges)
-    : findAllUndirectedCycles(graph.nodes, graph.edges)
-
-  steps.push({
-    narration: `Initialisation: Recherche de TOUS les ${cycleLabelEn} dans le graphe ${isDirected ? 'orienté' : 'non orienté'}.`,
-    visited: [],
-    frontier: [],
-    treeEdges: []
-  })
-
-  if (allCycles.length === 0) {
-    steps.push({
-      narration: `Résultat: Aucun ${cycleType} détecté dans le graphe. Le graphe est acyclique.`,
-      visited: [],
-      frontier: [],
-      treeEdges: []
-    })
+  const edgeColors: Record<string, string> = {}
+  
+  if (graph.edges.length === 0) {
+    steps.push({ narration: "Aucune arête à colorier.", visited: [], frontier: [], treeEdges: [] })
     return steps
   }
 
   steps.push({
-    narration: `${allCycles.length} ${cycleLabelEn} trouvé(s). Affichage de chacun...`,
+    narration: "Début de la coloration des arêtes. Deux arêtes adjacentes ne doivent pas avoir la même couleur.",
     visited: [],
     frontier: [],
-    treeEdges: []
+    treeEdges: [],
   })
 
-  // Accumulate all for final view
-  const finalNodeColors: Record<number, string> = {}
-  const finalEdgeColors: Record<string, string> = {}
-  const finalTreeEdgesSet = new Set<string>()
-
-  // Visualiser chaque cycle
-  allCycles.forEach((cycle, cycleIndex) => {
-    // Trouver les arêtes du cycle
-    const treeEdges: string[] = []
-    const edgeColors: Record<string, string> = {}
-    const nodeColors: Record<number, string> = {}
+  // Sort edges by some criteria for stability
+  const sortedEdges = [...graph.edges].sort((a, b) => a.id.localeCompare(b.id))
+  
+  for (const edge of sortedEdges) {
+    // Find colors used by incident edges
+    const incidentEdgeIds = graph.edges
+      .filter(e => e.id !== edge.id && (e.from === edge.from || e.to === edge.from || e.from === edge.to || e.to === edge.to))
+      .map(e => e.id)
     
-    // Pick a color from the component palette
-    const color = COMPONENT_COLORS[cycleIndex % COMPONENT_COLORS.length]
-
-    for (let i = 0; i < cycle.length - 1; i++) {
-      const from = cycle[i]
-      const to = cycle[i + 1]
-      const matchingEdge = graph.edges.find(e =>
-        (e.from === from && e.to === to) ||
-        (!isDirected && e.from === to && e.to === from)
-      )
-      if (matchingEdge) {
-        treeEdges.push(matchingEdge.id)
-        edgeColors[matchingEdge.id] = color
-        
-        finalTreeEdgesSet.add(matchingEdge.id)
-        finalEdgeColors[matchingEdge.id] = color
-      }
+    const forbiddenColors = new Set(incidentEdgeIds.map(id => edgeColors[id]).filter(Boolean))
+    
+    // Pick the first available color
+    let colorIdx = 0
+    while (forbiddenColors.has(COMPONENT_COLORS[colorIdx % COMPONENT_COLORS.length])) {
+      colorIdx++
     }
     
-    cycle.forEach(nodeId => {
-      nodeColors[nodeId] = color
-      finalNodeColors[nodeId] = color
-    })
+    const assignedColor = COMPONENT_COLORS[colorIdx % COMPONENT_COLORS.length]
+    edgeColors[edge.id] = assignedColor
 
-    const cycleLabel = cycle.join(' → ')
     steps.push({
-      narration: `${cycleType} #${cycleIndex + 1}: ${cycleLabel}`,
-      visited: cycle,
-      frontier: [],
-      treeEdges,
-      edgeColors,
-      nodeColors,
+      narration: `Coloration de l'arête ${edge.from}—${edge.to} avec la couleur ${colorIdx + 1}.`,
+      visited: [],
+      frontier: [edge.from, edge.to],
+      treeEdges: [],
+      currentEdgeId: edge.id,
+      edgeColors: { ...edgeColors }
     })
-  })
+  }
 
   steps.push({
-    narration: `Résultat final: ${allCycles.length} ${cycleLabelEn} au total ont été détectés dans ce graphe.`,
-    visited: graph.nodes,
+    narration: `Coloration terminée ! Nombre chromatique d'arêtes (approximatif) : ${new Set(Object.values(edgeColors)).size}.`,
+    visited: [],
     frontier: [],
-    treeEdges: Array.from(finalTreeEdgesSet),
-    edgeColors: finalEdgeColors,
-    nodeColors: finalNodeColors,
+    treeEdges: [],
+    edgeColors: { ...edgeColors }
   })
 
   return steps
 }
+
+// buildAllCyclesProgram removed: AllCycles cinema algorithm has been deleted.
 
 export function buildCinemaProgram(
   graph: GraphState,
@@ -1717,11 +2139,13 @@ export function buildCinemaProgram(
         return buildStronglyConnectedComponentsProgram(graph)
       case 'WelshPowell':
         return buildWelshPowellProgram(graph)
-      case 'AllCycles':
-        return buildAllCyclesProgram(graph)
+      case 'EdgeColoring':
+        return buildEdgeColoringProgram(graph)
+      // 'AllCycles' removed — no-op fallback
       case 'Bellman':
-      case 'BellmanFord':
         return buildBellmanProgram(graph, source)
+      case 'BellmanFord':
+        return buildBellmanFordProgram(graph, source)
       default:
         return []
     }
@@ -1836,6 +2260,254 @@ function buildBellmanProgram(graph: GraphState, source: NodeId): CinemaStep[] {
     visited: [],
     frontier: [],
     treeEdges: rebuildTreeEdges(),
+    distances: toDistanceRecord(),
+  })
+
+  return steps
+}
+function buildBellmanFordProgram(graph: GraphState, source: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+
+  const distances = new Map<NodeId, number>()
+  const parent = new Map<NodeId, string>()
+
+  for (const node of graph.nodes) {
+    distances.set(node, Number.POSITIVE_INFINITY)
+  }
+  distances.set(source, 0)
+
+  const toDistanceRecord = (): Record<number, number> => {
+    const record: Record<number, number> = {}
+    for (const node of graph.nodes) {
+      const val = distances.get(node)!
+      if (val !== Number.POSITIVE_INFINITY) record[node] = val
+    }
+    return record
+  }
+
+  const rebuildTreeEdges = () => Array.from(parent.values())
+
+  const V = new Set<NodeId>([source])
+
+  steps.push({
+    narration: `[Iter 1] Initialization: d(${source}) = 0, all others = ∞. V = {${source}}`,
+    visited: [],
+    frontier: [source],
+    treeEdges: [],
+    currentNode: source,
+    distances: toDistanceRecord(),
+  })
+
+  let iterCount = 2
+
+  while (V.size > 0) {
+    const i = V.values().next().value as NodeId
+    V.delete(i)
+
+    steps.push({
+      narration: `[Iter ${iterCount}] Select node ${i} from V and remove it. V = {${[...V].join(', ') || '∅'}}`,
+      visited: [],
+      frontier: [...V],
+      treeEdges: rebuildTreeEdges(),
+      currentNode: i,
+      distances: toDistanceRecord(),
+    })
+
+    const outEdges = graph.edges.filter(e => e.from === i)
+
+    for (const edge of outEdges) {
+      const j = edge.to
+      const lij = graph.weighted ? edge.weight : 1
+      const di = distances.get(i)!
+      const dj = distances.get(j)!
+      const newDist = di + lij
+
+      steps.push({
+        narration: `[Iter ${iterCount}] Examine edge (${i} → ${j}), weight = ${lij}. d(${i}) + ${lij} = ${newDist} vs d(${j}) = ${dj === Infinity ? '∞' : dj}`,
+        visited: [],
+        frontier: [...V],
+        treeEdges: rebuildTreeEdges(),
+        currentNode: i,
+        currentEdgeId: edge.id,
+        distances: toDistanceRecord(),
+      })
+
+      if (dj > newDist) {
+        distances.set(j, newDist)
+        parent.set(j, edge.id)
+        V.add(j)
+
+        steps.push({
+          narration: `[Iter ${iterCount}] ✅ Update: d(${j}) = ${newDist}. Node ${j} added to V. V = {${[...V].join(', ')}}`,
+          visited: [],
+          frontier: [...V],
+          treeEdges: rebuildTreeEdges(),
+          currentNode: j,
+          currentEdgeId: edge.id,
+          distances: toDistanceRecord(),
+        })
+      } else {
+        steps.push({
+          narration: `[Iter ${iterCount}] ❌ No update for ${j}: ${newDist} ≥ ${dj === Infinity ? '∞' : dj}`,
+          visited: [],
+          frontier: [...V],
+          treeEdges: rebuildTreeEdges(),
+          currentNode: i,
+          currentEdgeId: edge.id,
+          distances: toDistanceRecord(),
+        })
+      }
+    }
+
+    iterCount++
+  }
+
+  steps.push({
+    narration: `V is empty. Algorithm complete after ${iterCount - 1} iteration(s). Distances: ${graph.nodes.map(n => `d(${n})=${distances.get(n) === Infinity ? '∞' : distances.get(n)}`).join(', ')}`,
+    visited: graph.nodes.filter(n => distances.get(n) !== Infinity),
+    frontier: [],
+    treeEdges: rebuildTreeEdges(),
+    distances: toDistanceRecord(),
+  })
+
+  return steps
+}
+
+function buildDijkstraProgram(graph: GraphState, source: NodeId): CinemaStep[] {
+  const steps: CinemaStep[] = []
+  const distances = new Map<NodeId, number>()
+  const visited = new Set<NodeId>()
+  const treeEdges: string[] = []
+  const incomingEdge = new Map<NodeId, string>()
+
+  for (const nodeId of graph.nodes) {
+    distances.set(nodeId, Number.POSITIVE_INFINITY)
+  }
+  distances.set(source, 0)
+
+  const toDistanceRecord = (): Record<number, number> => {
+    const record: Record<number, number> = {}
+    for (const nodeId of graph.nodes) {
+      const value = distances.get(nodeId) ?? Number.POSITIVE_INFINITY
+      if (value !== Number.POSITIVE_INFINITY) record[nodeId] = value
+    }
+    return record
+  }
+
+  const distSnapshot = (): string =>
+    graph.nodes
+      .map(n => {
+        const d = distances.get(n)
+        return `d(${n})=${d === Number.POSITIVE_INFINITY ? '∞' : d}`
+      })
+      .join(', ')
+
+  const sSnapshot = (): string => `{${[...visited].join(', ')}}`
+
+  // ── Iter 1 : Initialisation pure ──────────────────────────────────────────
+  visited.add(source)
+
+  steps.push({
+    narration: `[Iter 1] Initialization: d(${source}) = 0, all others = ∞. xp = ${source}, A(xp) = -, S = {${source}}. ${distSnapshot()}`,
+    visited: [...visited],
+    frontier: graph.nodes.filter(n => !visited.has(n)),
+    treeEdges: [],
+    currentNode: source,
+    distances: toDistanceRecord(),
+  })
+
+  // ── Itérations 2, 3, ... ──────────────────────────────────────────────────
+  let iterCount = 2
+  let currentNode: NodeId = source
+
+  while (true) {
+    // Traitement des arcs sortants du xp courant
+    for (const neighbor of neighborsFor(graph, currentNode)) {
+      if (visited.has(neighbor.nodeId)) continue
+
+      const currentDist = distances.get(currentNode) ?? Number.POSITIVE_INFINITY
+      const tentative = currentDist + Math.max(0, neighbor.weight)
+      const currentBest = distances.get(neighbor.nodeId) ?? Number.POSITIVE_INFINITY
+
+      steps.push({
+        narration: `[Iter ${iterCount}] Examine edge (${currentNode} → ${neighbor.nodeId}), weight = ${neighbor.weight}. d(${currentNode}) + ${neighbor.weight} = ${tentative} vs d(${neighbor.nodeId}) = ${currentBest === Infinity ? '∞' : currentBest}`,
+        visited: [...visited],
+        frontier: graph.nodes.filter(n => !visited.has(n)),
+        treeEdges: [...treeEdges],
+        currentNode,
+        currentEdgeId: neighbor.edgeId,
+        distances: toDistanceRecord(),
+      })
+
+      if (tentative < currentBest) {
+        distances.set(neighbor.nodeId, tentative)
+        incomingEdge.set(neighbor.nodeId, neighbor.edgeId)
+
+        steps.push({
+          narration: `[Iter ${iterCount}] ✅ Update: d(${neighbor.nodeId}) = ${currentBest === Infinity ? '∞' : currentBest} → ${tentative}. ${distSnapshot()}`,
+          visited: [...visited],
+          frontier: graph.nodes.filter(n => !visited.has(n)),
+          treeEdges: [...treeEdges],
+          currentNode: neighbor.nodeId,
+          currentEdgeId: neighbor.edgeId,
+          distances: toDistanceRecord(),
+        })
+      } else {
+        steps.push({
+          narration: `[Iter ${iterCount}] ❌ No update for ${neighbor.nodeId}: ${tentative} ≥ ${currentBest === Infinity ? '∞' : currentBest}`,
+          visited: [...visited],
+          frontier: graph.nodes.filter(n => !visited.has(n)),
+          treeEdges: [...treeEdges],
+          currentNode,
+          currentEdgeId: neighbor.edgeId,
+          distances: toDistanceRecord(),
+        })
+      }
+    }
+
+    // Choisir le prochain xp = nœud non visité avec distance minimale
+    let nextNode: NodeId | null = null
+    let nextDist = Number.POSITIVE_INFINITY
+    for (const n of graph.nodes) {
+      if (visited.has(n)) continue
+      const d = distances.get(n) ?? Number.POSITIVE_INFINITY
+      if (d < nextDist) { nextDist = d; nextNode = n }
+    }
+
+    if (nextNode === null) break
+
+    // Ajouter nextNode à S
+    visited.add(nextNode)
+    const edgeId = incomingEdge.get(nextNode)
+    if (typeof edgeId === 'string' && !treeEdges.includes(edgeId)) {
+      treeEdges.push(edgeId)
+    }
+
+    const arcLabel = (() => {
+      const e = graph.edges.find(x => x.id === incomingEdge.get(nextNode!))
+      return e ? `(${e.from},${e.to})` : '-'
+    })()
+
+    // Step résumé de fin d'itération : distances + xp choisi + S
+    steps.push({
+      narration: `[Iter ${iterCount}] End: ${distSnapshot()} | xp = ${nextNode}, A(xp) = ${arcLabel}, S = ${sSnapshot()}`,
+      visited: [...visited],
+      frontier: graph.nodes.filter(n => !visited.has(n)),
+      treeEdges: [...treeEdges],
+      currentNode: nextNode,
+      distances: toDistanceRecord(),
+    })
+
+    currentNode = nextNode
+    iterCount++
+  }
+
+  // Step final
+  steps.push({
+    narration: `Dijkstra complete after ${iterCount - 1} iteration(s). ${distSnapshot()} | S = ${sSnapshot()} — STOP`,
+    visited: [...visited],
+    frontier: [],
+    treeEdges: [...treeEdges],
     distances: toDistanceRecord(),
   })
 
