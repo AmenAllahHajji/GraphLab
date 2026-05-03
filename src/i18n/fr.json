@@ -106,7 +106,7 @@
     "apply": "Appliquer les modifications"
   },
   "query": {
-    "placeholder": "Requête : path 1 5 | neighbors 3 | degree 4 | components | bridge / isthme",
+    "placeholder": "Requête : path 1 5 | neighbors 3 | degree 4 | components | isthme",
     "run": "Lancer la requête",
     "clear": "Effacer"
   },
